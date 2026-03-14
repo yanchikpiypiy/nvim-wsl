@@ -8,6 +8,7 @@ return {
         },
         cmd = "Telescope",
         keys = {
+            -- Config
             {
                 "<leader>fc",
                 function()
@@ -18,6 +19,14 @@ return {
                 end,
                 desc = "Find config file",
             },
+
+            -- Git pickers
+            { "<leader>gf", function() require("telescope.builtin").git_files() end,                          desc = "Git files (tracked)" },
+            { "<leader>gt", function() require("telescope.builtin").git_status() end,                         desc = "Git status (changed files)" },
+            { "<leader>gc", function() require("telescope.builtin").git_commits() end,                        desc = "Git commits (log)" },
+            { "<leader>gC", function() require("telescope.builtin").git_bcommits() end,                       desc = "Git commits (this buffer)" },
+            { "<leader>gl", function() require("telescope.builtin").git_branches() end,                       desc = "Git branches" },
+            { "<leader>gz", function() require("telescope.builtin").git_stash() end,                          desc = "Git stash" },
         },
         config = function()
             local telescope = require("telescope")
@@ -51,12 +60,18 @@ return {
                     },
                 },
                 pickers = {
-                    -- Clean LSP pickers: no inline code preview cluttering the list
-                    lsp_references      = { show_line = false, fname_width = 60 },
-                    lsp_definitions     = { show_line = false, fname_width = 60 },
-                    lsp_implementations = { show_line = false, fname_width = 60 },
+                    -- LSP
+                    lsp_references       = { show_line = false, fname_width = 60 },
+                    lsp_definitions      = { show_line = false, fname_width = 60 },
+                    lsp_implementations  = { show_line = false, fname_width = 60 },
                     lsp_type_definitions = { show_line = false, fname_width = 60 },
                     lsp_document_symbols = { symbol_width = 50 },
+                    -- Git
+                    git_commits  = { mappings = { i = { ["<CR>"] = "select_default" } } },
+                    git_bcommits = { mappings = { i = { ["<CR>"] = "select_default" } } },
+                    git_branches = { mappings = { i = { ["<CR>"] = "git_checkout" } } },
+                    git_status   = { git_icons = { added = "+", changed = "~", deleted = "-",
+                                                   renamed = "→", untracked = "?", copied = "c" } },
                 },
                 extensions = {
                     ["ui-select"] = {
