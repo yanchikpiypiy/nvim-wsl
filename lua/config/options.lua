@@ -18,7 +18,7 @@ vim.g.maplocalleader = " "
 vim.diagnostic.config({
     virtual_text = {
         spacing = 4,
-        prefix = "●", -- Could be '■', '▎', 'x', '●'
+        prefix = "●",
         source = "always",
     },
     signs = true,
@@ -33,7 +33,6 @@ vim.diagnostic.config({
     },
 })
 
--- Define diagnostic signs
 local signs = { Error = "✘", Warn = "▲", Hint = "⚑", Info = "»" }
 for type, icon in pairs(signs) do
     local hl = "DiagnosticSign" .. type

@@ -1,0 +1,137 @@
+-- Bordered hover using actual client offset encoding
+vim.lsp.buf.hover = function()
+    local bufnr = vim.api.nvim_get_current_buf()
+    local winnr = vim.api.nvim_get_current_win()
+
+    local clients = vim.lsp.get_clients({ bufnr = bufnr })
+    local offset_encoding = clients[1] and clients[1].offset_encoding or "utf-16"
+
+    local params = vim.lsp.util.make_position_params(winnr, offset_encoding)
+
+    vim.lsp.buf_request(bufnr, "textDocument/hover", params, function(err, result, ctx, config)
+        config = config or {}
+        config.border = "rounded"
+        vim.lsp.handlers.hover(err, result, ctx, config)
+    end)
+end
+
+return {
+    {
+        "williamboman/mason.nvim",
+        config = function()
+            require("mason").setup()
+        end,
+    },
+    {
+        -- Bridges Mason and lspconfig: ensures servers are installed before they start
+        "williamboman/mason-lspconfig.nvim",
+        dependencies = { "williamboman/mason.nvim" },
+        config = function()
+            require("mason-lspconfig").setup({
+                -- These will be auto-installed by Mason on first launch if missing
+                ensure_installed = {
+                    "lua_ls",   -- Lua
+                    "clangd",   -- C / C++
+                    "ts_ls",    -- JS / TS / React
+                },
+                automatic_installation = true,
+            })
+        end,
+    },
+    {
+        "neovim/nvim-lspconfig",
+        dependencies = {
+            "williamboman/mason-lspconfig.nvim",
+            "hrsh7th/cmp-nvim-lsp",
+            "nvim-telescope/telescope.nvim",
+        },
+        config = function()
+            local capabilities = require("cmp_nvim_lsp").default_capabilities()
+            capabilities.offsetEncoding = { "utf-16" }
+
+            local on_attach = function(client, bufnr)
+                local map = vim.keymap.set
+                local o = { buffer = bufnr, silent = true }
+                local tb = require("telescope.builtin")
+
+                -- Navigation (all via telescope for consistent preview)
+                map("n", "K",  vim.lsp.buf.hover,          vim.tbl_extend("force", o, { desc = "Hover docs" }))
+                map("n", "gd", tb.lsp_definitions,          vim.tbl_extend("force", o, { desc = "Go to definition" }))
+                map("n", "gr", tb.lsp_references,           vim.tbl_extend("force", o, { desc = "Find references" }))
+                map("n", "gi", tb.lsp_implementations,      vim.tbl_extend("force", o, { desc = "Go to implementation" }))
+                map("n", "gy", tb.lsp_type_definitions,     vim.tbl_extend("force", o, { desc = "Go to type definition" }))
+
+                -- Refactoring
+                map("n", "<leader>rn", vim.lsp.buf.rename,       vim.tbl_extend("force", o, { desc = "Rename symbol" }))
+                map("n", "<leader>ca", vim.lsp.buf.code_action,  vim.tbl_extend("force", o, { desc = "Code action" }))
+
+                -- LSP navigation group (<leader>l)
+                map("n", "<leader>ls", tb.lsp_document_symbols,         vim.tbl_extend("force", o, { desc = "Document symbols" }))
+                map("n", "<leader>lw", tb.lsp_dynamic_workspace_symbols, vim.tbl_extend("force", o, { desc = "Workspace symbols" }))
+                map("n", "<leader>li", "<cmd>LspInfo<CR>",               vim.tbl_extend("force", o, { desc = "LSP info" }))
+
+                -- Inlay hints (Neovim 0.10+): auto-enable if server supports them, with a toggle
+                if vim.lsp.inlay_hint and client.supports_method("textDocument/inlayHint") then
+                    vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
+                    map("n", "<leader>lh", function()
+                        vim.lsp.inlay_hint.enable(
+                            not vim.lsp.inlay_hint.is_enabled({ bufnr = bufnr }),
+                            { bufnr = bufnr }
+                        )
+                    end, vim.tbl_extend("force", o, { desc = "Toggle inlay hints" }))
+                end
+            end
+
+            -- Lua
+            vim.lsp.config.lua_ls = {
+                cmd = { "lua-language-server" },
+                root_markers = { ".luarc.json", ".git" },
+                capabilities = capabilities,
+                on_attach = on_attach,
+                settings = {
+                    Lua = {
+                        runtime = { version = "LuaJIT" },
+                        -- lazydev.nvim handles workspace library — don't set it here
+                        workspace = { checkThirdParty = false },
+                        telemetry = { enable = false },
+                    },
+                },
+            }
+
+            -- C / C++
+            -- For project-wide references (gr), clangd needs a compile_commands.json.
+            -- Generate it with: cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -B build
+            -- or bear: bear -- make
+            vim.lsp.config.clangd = {
+                cmd = {
+                    "clangd",
+                    "--offset-encoding=utf-16",
+                    "--background-index",          -- index whole project for cross-file gr/gd
+                    "--clang-tidy",                -- live clang-tidy diagnostics
+                    "--header-insertion=iwyu",     -- suggest correct headers (include-what-you-use)
+                    "--completion-style=detailed", -- show full function signatures in completion
+                    "--function-arg-placeholders=false",
+                },
+                root_markers = { ".clangd", "compile_commands.json", ".git" },
+                capabilities = capabilities,
+                on_attach = on_attach,
+            }
+
+            -- JS / TS / React
+            vim.lsp.config.ts_ls = {
+                cmd = { "typescript-language-server", "--stdio" },
+                root_markers = { "package.json", "tsconfig.json", ".git" },
+                filetypes = {
+                    "javascript",
+                    "javascriptreact",
+                    "typescript",
+                    "typescriptreact",
+                },
+                capabilities = capabilities,
+                on_attach = on_attach,
+            }
+
+            vim.lsp.enable({ "lua_ls", "clangd", "ts_ls" })
+        end,
+    },
+}

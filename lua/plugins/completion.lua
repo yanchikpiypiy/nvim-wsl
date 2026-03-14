@@ -2,22 +2,18 @@ return {
     -- Snippets engine
     {
         "L3MON4D3/LuaSnip",
-        dependencies = {
-            "rafamadriz/friendly-snippets",
-        },
+        dependencies = { "rafamadriz/friendly-snippets" },
         config = function()
             require("luasnip.loaders.from_vscode").lazy_load()
         end,
     },
 
-    -- Autopairs (method())
+    -- Autopairs
     {
         "windwp/nvim-autopairs",
         event = "InsertEnter",
         config = function()
-            require("nvim-autopairs").setup({
-                check_ts = true,
-            })
+            require("nvim-autopairs").setup({ check_ts = true })
         end,
     },
 
@@ -37,28 +33,20 @@ return {
 
             cmp.setup({
                 window = {
-                    completion = cmp.config.window.bordered({
-                        border = "rounded",
-                    }),
-                    documentation = cmp.config.window.bordered({
-                        border = "rounded",
-                    }),
+                    completion = cmp.config.window.bordered({ border = "rounded" }),
+                    documentation = cmp.config.window.bordered({ border = "rounded" }),
                 },
-
                 snippet = {
                     expand = function(args)
                         luasnip.lsp_expand(args.body)
                     end,
                 },
-
                 mapping = {
                     ["<C-Space>"] = cmp.mapping.complete(),
-
                     ["<CR>"] = cmp.mapping.confirm({
                         behavior = cmp.ConfirmBehavior.Replace,
                         select = true,
                     }),
-
                     ["<Tab>"] = cmp.mapping(function(fallback)
                         if cmp.visible() then
                             cmp.select_next_item()
@@ -68,7 +56,6 @@ return {
                             fallback()
                         end
                     end, { "i", "s" }),
-
                     ["<S-Tab>"] = cmp.mapping(function(fallback)
                         if cmp.visible() then
                             cmp.select_prev_item()
@@ -79,7 +66,6 @@ return {
                         end
                     end, { "i", "s" }),
                 },
-
                 sources = {
                     { name = "nvim_lsp" },
                     { name = "luasnip" },
@@ -88,12 +74,8 @@ return {
                 },
             })
 
-            -- 🔥 THIS is what inserts method()
             local cmp_autopairs = require("nvim-autopairs.completion.cmp")
-            cmp.event:on(
-                "confirm_done",
-                cmp_autopairs.on_confirm_done()
-            )
+            cmp.event:on("confirm_done", cmp_autopairs.on_confirm_done())
         end,
     },
 }
