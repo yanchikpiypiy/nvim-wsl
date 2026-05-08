@@ -8,6 +8,11 @@ return {
         },
         cmd = "Telescope",
         keys = {
+            -- Files
+            { "<leader>fs", function() require("telescope.builtin").find_files() end,  desc = "Find files" },
+            { "<leader>fg", function() require("telescope.builtin").live_grep() end,   desc = "Live grep" },
+            { "<leader>fb", function() require("telescope.builtin").buffers() end,     desc = "Buffers" },
+
             -- Config
             {
                 "<leader>fc",
@@ -36,17 +41,30 @@ return {
                 defaults = {
                     prompt_prefix = "  ",
                     selection_caret = " ",
-                    path_display = { "truncate" },
+                    path_display = function(_, path)
+                        local parts = {}
+                        for part in path:gmatch("[^/\\]+") do
+                            table.insert(parts, part)
+                        end
+                        local n = #parts
+                        if n <= 3 then return path end
+                        return table.concat({ parts[n-2], parts[n-1], parts[n] }, "/")
+                    end,
                     layout_strategy = "horizontal",
                     layout_config = {
                         horizontal = {
-                            preview_width = 0.55,
-                            results_width = 0.45,
+                            preview_width = 0.45,
+                            results_width = 0.55,
                         },
                         width = 0.9,
                         height = 0.85,
                     },
-                    file_ignore_patterns = { "node_modules", ".git/", "build/", "%.o$", "%.a$", "%.out$" },
+                    file_ignore_patterns = {
+                        "node_modules", ".git/", "build/",
+                        "%.o$", "%.a$", "%.out$",
+                        "bin/", "obj/", "%.dll$", "%.exe$", "%.pdb$",
+                        "%.min%.js$", "%.map$",
+                    },
                     mappings = {
                         i = {
                             ["<C-j>"] = actions.move_selection_next,
@@ -60,6 +78,22 @@ return {
                     },
                 },
                 pickers = {
+                    find_files = {
+                        find_command = {
+                            "fd", "--type", "f", "--strip-cwd-prefix", "--hidden",
+                            "--exclude", ".git",
+                            "--exclude", "bin",
+                            "--exclude", "obj",
+                            "--exclude", "build",
+                            "--exclude", "node_modules",
+                            "--exclude", "*.exe",
+                            "--exclude", "*.dll",
+                            "--exclude", "*.pdb",
+                        },
+                    },
+                    live_grep = {
+                        additional_args = { "--hidden", "--glob", "!.git" },
+                    },
                     -- LSP
                     lsp_references       = { show_line = false, fname_width = 60 },
                     lsp_definitions      = { show_line = false, fname_width = 60 },

@@ -1,19 +1,48 @@
--- Bordered hover using actual client offset encoding
+-- Strip CommonMark backslash escapes from Roslyn hover docs (e.g. v1\.0 → v1.0)
 vim.lsp.buf.hover = function()
     local bufnr = vim.api.nvim_get_current_buf()
     local winnr = vim.api.nvim_get_current_win()
-
     local clients = vim.lsp.get_clients({ bufnr = bufnr })
     local offset_encoding = clients[1] and clients[1].offset_encoding or "utf-16"
-
     local params = vim.lsp.util.make_position_params(winnr, offset_encoding)
-
     vim.lsp.buf_request(bufnr, "textDocument/hover", params, function(err, result, ctx, config)
+        if result and result.contents then
+            local val = type(result.contents) == "table" and result.contents.value or result.contents
+            if type(val) == "string" then
+                val = val:gsub("\\([%p])", "%1")
+                val = val:gsub("&nbsp;", " ")
+                val = val:gsub("&lt;", "<")
+                val = val:gsub("&gt;", ">")
+                val = val:gsub("&amp;", "&")
+                val = val:gsub("&quot;", '"')
+                val = val:gsub("&apos;", "'")
+                if type(result.contents) == "table" then result.contents.value = val
+                else result.contents = val end
+            end
+        end
         config = config or {}
         config.border = "rounded"
         vim.lsp.handlers.hover(err, result, ctx, config)
     end)
 end
+
+-- Deduplicate diagnostics (Roslyn sends same diagnostic per project context)
+local orig_diagnostic_handler = vim.lsp.handlers["textDocument/publishDiagnostics"]
+vim.lsp.handlers["textDocument/publishDiagnostics"] = function(err, result, ctx, config)
+    if result and result.diagnostics then
+        local seen, deduped = {}, {}
+        for _, d in ipairs(result.diagnostics) do
+            local key = d.range.start.line .. ":" .. d.range.start.character .. ":" .. d.message
+            if not seen[key] then
+                seen[key] = true
+                table.insert(deduped, d)
+            end
+        end
+        result.diagnostics = deduped
+    end
+    orig_diagnostic_handler(err, result, ctx, config)
+end
+
 
 return {
     {
@@ -47,11 +76,13 @@ return {
         "neovim/nvim-lspconfig",
         dependencies = {
             "williamboman/mason-lspconfig.nvim",
-            "hrsh7th/cmp-nvim-lsp",
+            "saghen/blink.cmp",
             "nvim-telescope/telescope.nvim",
         },
         config = function()
-            local capabilities = require("cmp_nvim_lsp").default_capabilities()
+            local capabilities = require("blink.cmp").get_lsp_capabilities(
+                vim.lsp.protocol.make_client_capabilities()
+            )
             capabilities.offsetEncoding = { "utf-16" }
 
             local on_attach = function(client, bufnr)
@@ -60,7 +91,7 @@ return {
                 local tb = require("telescope.builtin")
 
                 -- Navigation (all via telescope for consistent preview)
-                map("n", "K",  vim.lsp.buf.hover,          vim.tbl_extend("force", o, { desc = "Hover docs" }))
+                map("n", "K",  vim.lsp.buf.hover, vim.tbl_extend("force", o, { desc = "Hover docs" }))
                 map("n", "gd", tb.lsp_definitions,          vim.tbl_extend("force", o, { desc = "Go to definition" }))
                 map("n", "gr", tb.lsp_references,           vim.tbl_extend("force", o, { desc = "Find references" }))
                 map("n", "gi", tb.lsp_implementations,      vim.tbl_extend("force", o, { desc = "Go to implementation" }))
@@ -137,6 +168,8 @@ return {
             }
 
             vim.lsp.enable({ "lua_ls", "clangd", "ts_ls" })
+            -- Roslyn handles C# — prevent OmniSharp from auto-starting
+            vim.lsp.enable("omnisharp", false)
         end,
     },
 }

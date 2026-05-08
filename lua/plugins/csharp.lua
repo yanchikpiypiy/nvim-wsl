@@ -1,9 +1,11 @@
 return {
     "seblyng/roslyn.nvim",
     event = "VeryLazy",
-    dependencies = { "williamboman/mason.nvim" },
+    dependencies = { "williamboman/mason.nvim", "saghen/blink.cmp" },
     config = function()
-        local capabilities = require("cmp_nvim_lsp").default_capabilities()
+        local capabilities = require("blink.cmp").get_lsp_capabilities(
+            vim.lsp.protocol.make_client_capabilities()
+        )
 
         vim.lsp.config("roslyn", {
             capabilities = capabilities,
@@ -51,18 +53,21 @@ return {
 
                 if client.supports_method("textDocument/inlayHint") then
                     vim.lsp.inlay_hint.enable(true, { bufnr = args.buf })
-                    map("n", "<leader>lh", function()
-                        vim.lsp.inlay_hint.enable(
-                            not vim.lsp.inlay_hint.is_enabled({ bufnr = args.buf }),
-                            { bufnr = args.buf }
-                        )
-                    end, vim.tbl_extend("force", o, { desc = "Toggle inlay hints" }))
                 end
             end,
         })
 
         require("roslyn").setup({
             broad_search = true,
+            choose_target = function(targets)
+                for _, target in ipairs(targets) do
+                    if target:match("%.sln$") then
+                        return target
+                    end
+                end
+                return targets[1]
+            end,
+            lock_target = true,
         })
     end,
 }

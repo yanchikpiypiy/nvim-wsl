@@ -14,9 +14,13 @@ return {
     },
     opts = {
         formatters_by_ft = {
-            lua = { "stylua" },
-            cpp = { "clang-format" },
-            c = { "clang-format" },
+            lua                = { "stylua" },
+            cpp                = { "clang-format" },
+            c                  = { "clang-format" },
+            javascript         = { "prettier" },
+            javascriptreact    = { "prettier" },
+            typescript         = { "prettier" },
+            typescriptreact    = { "prettier" },
         },
         format_on_save = {
             timeout_ms = 500,

@@ -10,7 +10,7 @@ return {
 
     {
         "nvim-neo-tree/neo-tree.nvim",
-        branch = "v3.x",
+        branch = "main",
         dependencies = {
             "nvim-lua/plenary.nvim",
             "nvim-tree/nvim-web-devicons",
@@ -48,7 +48,7 @@ return {
                 close_if_last_window = true,
                 popup_border_style   = "rounded",
                 enable_git_status    = true,
-                enable_diagnostics   = true,
+                enable_diagnostics   = false,
 
                 default_component_configs = {
                     indent = {
@@ -106,7 +106,7 @@ return {
                         hide_gitignored = false,
                     },
                     follow_current_file    = { enabled = true },
-                    use_libuv_file_watcher = true,
+                    use_libuv_file_watcher = false, -- slow on Windows/WSL, use manual refresh (r) instead
                 },
             })
         end,

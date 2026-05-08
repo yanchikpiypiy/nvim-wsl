@@ -8,7 +8,7 @@ return {
         end,
     },
 
-    -- Autopairs
+    -- Autopairs (works independently of blink)
     {
         "windwp/nvim-autopairs",
         event = "InsertEnter",
@@ -17,65 +17,128 @@ return {
         end,
     },
 
+    -- Copilot source for blink
+    { "giuxtaposition/blink-cmp-copilot" },
+
     -- Completion
     {
-        "hrsh7th/nvim-cmp",
-        event = "InsertEnter",
+        "saghen/blink.cmp",
         dependencies = {
-            "hrsh7th/cmp-nvim-lsp",
-            "hrsh7th/cmp-buffer",
-            "hrsh7th/cmp-path",
-            "saadparwaiz1/cmp_luasnip",
+            "L3MON4D3/LuaSnip",
+            "giuxtaposition/blink-cmp-copilot",
         },
-        config = function()
-            local cmp = require("cmp")
-            local luasnip = require("luasnip")
+        version = "*",
+        opts = {
+            keymap = {
+                preset = "none",
+                ["<C-x>"]     = { "show", "fallback" },
+                ["<C-e>"]     = { "cancel", "fallback" },
+                ["<CR>"]      = { "accept", "fallback" },
+                ["<Tab>"]     = { "select_next", "snippet_forward", "fallback" },
+                ["<S-Tab>"]   = { "select_prev", "snippet_backward", "fallback" },
+            },
 
-            cmp.setup({
-                window = {
-                    completion = cmp.config.window.bordered({ border = "rounded" }),
-                    documentation = cmp.config.window.bordered({ border = "rounded" }),
+            appearance = {
+                nerd_font_variant = "mono",
+                kind_icons = {
+                    Text          = "󰉿",
+                    Method        = "󰆧",
+                    Function      = "󰊕",
+                    Constructor   = "",
+                    Field         = "󰜢",
+                    Variable      = "󰀫",
+                    Class         = "󰠱",
+                    Interface     = "",
+                    Module        = "",
+                    Property      = "󰜢",
+                    Unit          = "󰑭",
+                    Value         = "󰎠",
+                    Enum          = "",
+                    Keyword       = "󰌋",
+                    Snippet       = "",
+                    Color         = "󰏘",
+                    File          = "󰈙",
+                    Reference     = "󰈇",
+                    Folder        = "󰉋",
+                    EnumMember    = "",
+                    Constant      = "󰏿",
+                    Struct        = "󰙅",
+                    Event         = "",
+                    Operator      = "󰆕",
+                    TypeParameter = "",
                 },
-                snippet = {
-                    expand = function(args)
-                        luasnip.lsp_expand(args.body)
-                    end,
-                },
-                mapping = {
-                    ["<C-Space>"] = cmp.mapping.complete(),
-                    ["<CR>"] = cmp.mapping.confirm({
-                        behavior = cmp.ConfirmBehavior.Replace,
-                        select = true,
-                    }),
-                    ["<Tab>"] = cmp.mapping(function(fallback)
-                        if cmp.visible() then
-                            cmp.select_next_item()
-                        elseif luasnip.expand_or_jumpable() then
-                            luasnip.expand_or_jump()
-                        else
-                            fallback()
-                        end
-                    end, { "i", "s" }),
-                    ["<S-Tab>"] = cmp.mapping(function(fallback)
-                        if cmp.visible() then
-                            cmp.select_prev_item()
-                        elseif luasnip.jumpable(-1) then
-                            luasnip.jump(-1)
-                        else
-                            fallback()
-                        end
-                    end, { "i", "s" }),
-                },
-                sources = {
-                    { name = "nvim_lsp" },
-                    { name = "luasnip" },
-                    { name = "buffer" },
-                    { name = "path" },
-                },
-            })
+            },
 
-            local cmp_autopairs = require("nvim-autopairs.completion.cmp")
-            cmp.event:on("confirm_done", cmp_autopairs.on_confirm_done())
-        end,
+            sources = {
+                default = { "lsp", "path", "copilot", "snippets", "buffer" },
+                providers = {
+                    lsp = {
+                        score_offset = 10,
+                    },
+                    copilot = {
+                        name         = "copilot",
+                        module       = "blink-cmp-copilot",
+                        score_offset = 100,
+                        async        = true,
+                    },
+                    snippets = {
+                        score_offset = 50,
+                        opts = { friendly_snippets = true },
+                    },
+                    buffer = {
+                        score_offset = -10,
+                        opts = {
+                            -- only show buffer completions from visible buffers
+                            get_bufnrs = function()
+                                return vim.tbl_filter(function(b)
+                                    return vim.bo[b].buftype == ""
+                                end, vim.api.nvim_list_bufs())
+                            end,
+                        },
+                    },
+                },
+            },
+
+            snippets = { preset = "luasnip" },
+
+            completion = {
+                ghost_text = {
+                    enabled = true,
+                },
+                list = {
+                    selection = {
+                        preselect   = true,
+                        auto_insert = false,
+                    },
+                },
+                menu = {
+                    border = "rounded",
+                    draw = {
+                        treesitter = { "lsp" },
+                        columns = {
+                            { "kind_icon",  gap = 1 },
+                            { "label",      "label_description", gap = 2 },
+                            { "kind" },
+                        },
+                    },
+                },
+                documentation = {
+                    auto_show          = true,
+                    auto_show_delay_ms = 100,
+                    window = {
+                        border      = "rounded",
+                        min_width   = 20,
+                        max_width   = 80,
+                        max_height  = 20,
+                        winhighlight = "Normal:BlinkCmpDoc,FloatBorder:BlinkCmpDocBorder",
+                    },
+                },
+            },
+
+            signature = {
+                enabled = true,
+                window  = { border = "rounded" },
+            },
+        },
     },
 }
