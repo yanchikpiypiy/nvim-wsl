@@ -11,7 +11,7 @@ return {
     config = function()
         require("trouble").setup({
             modes = {
-                diagnostics = { auto_close = true },
+                diagnostics = { auto_close = true, focus = true },
             },
         })
     end,
