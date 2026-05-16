@@ -93,6 +93,7 @@ return {
                 -- Navigation (all via telescope for consistent preview)
                 map("n", "K",  vim.lsp.buf.hover, vim.tbl_extend("force", o, { desc = "Hover docs" }))
                 map("n", "gd", tb.lsp_definitions,          vim.tbl_extend("force", o, { desc = "Go to definition" }))
+                map("n", "gD", vim.lsp.buf.declaration,     vim.tbl_extend("force", o, { desc = "Go to declaration" }))
                 map("n", "gr", tb.lsp_references,           vim.tbl_extend("force", o, { desc = "Find references" }))
                 map("n", "gi", tb.lsp_implementations,      vim.tbl_extend("force", o, { desc = "Go to implementation" }))
                 map("n", "gy", tb.lsp_type_definitions,     vim.tbl_extend("force", o, { desc = "Go to type definition" }))
