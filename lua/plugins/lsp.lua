@@ -107,21 +107,6 @@ return {
                 map("n", "<leader>lw", tb.lsp_dynamic_workspace_symbols, vim.tbl_extend("force", o, { desc = "Workspace symbols" }))
                 map("n", "<leader>li", "<cmd>LspInfo<CR>",               vim.tbl_extend("force", o, { desc = "LSP info" }))
 
-                -- Switch between .cpp and .h (clangd only)
-                if client.name == "clangd" then
-                    map("n", "<leader>gh", function()
-                        vim.lsp.buf_request(0, "textDocument/switchSourceHeader",
-                            { uri = vim.uri_from_bufnr(0) },
-                            function(err, result)
-                                if err or not result then
-                                    vim.notify("No header/source file found", vim.log.levels.WARN)
-                                    return
-                                end
-                                vim.cmd("edit " .. vim.uri_to_fname(result))
-                            end)
-                    end, vim.tbl_extend("force", o, { desc = "Switch header/source" }))
-                end
-
                 -- Inlay hints (Neovim 0.10+): auto-enable if server supports them, with a toggle
                 if vim.lsp.inlay_hint and client.supports_method("textDocument/inlayHint") then
                     vim.lsp.inlay_hint.enable(true, { bufnr = bufnr })
