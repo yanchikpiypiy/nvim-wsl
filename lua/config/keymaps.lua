@@ -29,3 +29,11 @@ map("n", "<C-Left>",  "<cmd>vertical resize -2<CR>",  vim.tbl_extend("force", op
 map("n", "<C-Right>", "<cmd>vertical resize +2<CR>",  vim.tbl_extend("force", opts, { desc = "Increase width" }))
 map("n", "<C-Up>",    "<cmd>resize +2<CR>",            vim.tbl_extend("force", opts, { desc = "Increase height" }))
 map("n", "<C-Down>",  "<cmd>resize -2<CR>",            vim.tbl_extend("force", opts, { desc = "Decrease height" }))
+
+-- ===============================
+-- System clipboard (+ register)  --  <leader> = Space
+-- ===============================
+-- Select text (visual) then <Space>y, or <Space>Y to grab the whole line.
+map({ "n", "v" }, "<leader>y", '"+y', vim.tbl_extend("force", opts, { desc = "Yank to system clipboard" }))
+map("n",          "<leader>Y", '"+Y', vim.tbl_extend("force", opts, { desc = "Yank line to system clipboard" }))
+map({ "n", "v" }, "<leader>p", '"+p', vim.tbl_extend("force", opts, { desc = "Paste from system clipboard" }))

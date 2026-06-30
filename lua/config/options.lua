@@ -11,11 +11,9 @@ opt.tabstop = 4
 opt.smartindent = true
 opt.signcolumn = "yes"
 opt.termguicolors = true
-opt.fileformats = { "unix", "dos" }
+opt.fileformats = { "unix" }
 opt.updatetime = 250
 opt.timeoutlen = 300
--- WSL system clipboard
-opt.clipboard = "unnamedplus"
 
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
