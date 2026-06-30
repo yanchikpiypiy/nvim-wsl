@@ -34,8 +34,8 @@ return {
                 ["<C-x>"]     = { "show", "fallback" },
                 ["<C-e>"]     = { "cancel", "fallback" },
                 ["<CR>"]      = { "accept", "fallback" },
-                ["<Tab>"]     = { "select_next", "snippet_forward", "fallback" },
-                ["<S-Tab>"]   = { "select_prev", "snippet_backward", "fallback" },
+                ["<Tab>"]     = { "snippet_forward", "select_next", "fallback" },
+                ["<S-Tab>"]   = { "snippet_backward", "select_prev", "fallback" },
             },
 
             appearance = {

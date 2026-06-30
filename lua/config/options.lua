@@ -40,52 +40,53 @@ vim.diagnostic.config({
 vim.api.nvim_create_autocmd("InsertLeave", {
     callback = function()
         local bufnr = vim.api.nvim_get_current_buf()
-        if vim.bo[bufnr].buftype ~= "" then return end
-        if vim.bo[bufnr].modified then
-            vim.cmd("silent write")
+        local bo = vim.bo[bufnr]
+        -- skip special / readonly / non-modifiable / unnamed buffers (avoids E45)
+        if bo.buftype ~= "" or bo.readonly or not bo.modifiable then return end
+        if vim.api.nvim_buf_get_name(bufnr) == "" then return end
+        if bo.modified then
+            pcall(vim.cmd, "silent write")
         end
     end,
 })
 
--- Roslyn semantic token highlights (everforest doesn't define these)
+-- Roslyn (C#) semantic token colors, matched to the monochrome scheme.
 vim.api.nvim_create_autocmd("ColorScheme", {
     callback = function()
-        -- Everforest palette
-        local yellow  = "#dbbc7f"
-        local green   = "#a7c080"
-        local blue    = "#7fbbb3"
-        local purple  = "#d699b6"
-        local red     = "#e67e80"
-        local orange  = "#e69875"
-        local aqua    = "#83c092"
-        local fg      = "#d3c6aa"
+        -- Monochrome palette
+        local grey   = "#a6a6a6"  -- types
+        local red    = "#e85c6a"  -- methods
+        local lav     = "#d8bdf3"  -- functions
+        local pink    = "#dd8a9c"  -- properties / fields
+        local amber  = "#d6a06a"  -- constants / enum members
+        local white  = "#eeeeee"  -- variables / parameters
 
         local hls = {
             -- Types
-            ["@lsp.type.namespace.cs"]           = { fg = aqua },
-            ["@lsp.type.type.cs"]                = { fg = yellow },
-            ["@lsp.type.class.cs"]               = { fg = yellow },
-            ["@lsp.type.interface.cs"]           = { fg = yellow },
-            ["@lsp.type.struct.cs"]              = { fg = yellow },
-            ["@lsp.type.enum.cs"]                = { fg = yellow },
-            ["@lsp.type.delegate.cs"]            = { fg = yellow },
-            ["@lsp.type.typeParameter.cs"]       = { fg = yellow },
-            ["@lsp.type.recordClass.cs"]         = { fg = yellow },
-            ["@lsp.type.recordStruct.cs"]        = { fg = yellow },
+            ["@lsp.type.namespace.cs"]           = { fg = grey },
+            ["@lsp.type.type.cs"]                = { fg = grey },
+            ["@lsp.type.class.cs"]               = { fg = grey },
+            ["@lsp.type.interface.cs"]           = { fg = grey },
+            ["@lsp.type.struct.cs"]              = { fg = grey },
+            ["@lsp.type.enum.cs"]                = { fg = grey },
+            ["@lsp.type.delegate.cs"]            = { fg = grey },
+            ["@lsp.type.typeParameter.cs"]       = { fg = grey },
+            ["@lsp.type.recordClass.cs"]         = { fg = grey },
+            ["@lsp.type.recordStruct.cs"]        = { fg = grey },
             -- Members
-            ["@lsp.type.method.cs"]              = { fg = green },
-            ["@lsp.type.extensionMethod.cs"]     = { fg = green },
-            ["@lsp.type.function.cs"]            = { fg = green },
-            ["@lsp.type.operatorOverloaded.cs"]  = { fg = green },
-            ["@lsp.type.property.cs"]            = { fg = blue },
-            ["@lsp.type.field.cs"]               = { fg = blue },
-            ["@lsp.type.event.cs"]               = { fg = blue },
-            ["@lsp.type.enumMember.cs"]          = { fg = purple },
-            ["@lsp.type.constant.cs"]            = { fg = purple },
+            ["@lsp.type.method.cs"]              = { fg = red },
+            ["@lsp.type.extensionMethod.cs"]     = { fg = red },
+            ["@lsp.type.function.cs"]            = { fg = lav },
+            ["@lsp.type.operatorOverloaded.cs"]  = { fg = red },
+            ["@lsp.type.property.cs"]            = { fg = pink },
+            ["@lsp.type.field.cs"]               = { fg = pink },
+            ["@lsp.type.event.cs"]               = { fg = pink },
+            ["@lsp.type.enumMember.cs"]          = { fg = amber },
+            ["@lsp.type.constant.cs"]            = { fg = amber },
             -- Variables
-            ["@lsp.type.variable.cs"]            = { fg = fg },
-            ["@lsp.type.parameter.cs"]           = { fg = orange },
-            ["@lsp.type.local.cs"]               = { fg = fg },
+            ["@lsp.type.variable.cs"]            = { fg = white },
+            ["@lsp.type.parameter.cs"]           = { fg = white, italic = true },
+            ["@lsp.type.local.cs"]               = { fg = white },
             -- Modifiers (style only, don't change color)
             ["@lsp.mod.static.cs"]               = { italic = true },
             ["@lsp.mod.readonly.cs"]             = { italic = true },

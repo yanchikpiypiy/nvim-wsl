@@ -152,6 +152,9 @@ return {
                 root_markers = { ".clangd", "compile_commands.json", ".git" },
                 capabilities = capabilities,
                 on_attach = on_attach,
+                -- Full-document sync: avoids a Neovim incremental-sync core bug
+                -- (vim/lsp/sync.lua:136 assertion in compute_diff with clangd).
+                flags = { allow_incremental_sync = false },
             }
 
             -- JS / TS / React
