@@ -14,6 +14,15 @@ opt.termguicolors = true
 opt.fileformats = { "unix" }
 opt.updatetime = 250
 opt.timeoutlen = 300
+-- System clipboard: auto-sync every yank to the + register.
+-- On Windows-native nvim this uses the OS clipboard directly (no warm-up
+-- needed). Under WSL it goes through win32yank; the vim.schedule below warms
+-- the provider so the first yank doesn't pay the detection cost mid-edit.
+-- Explicit <leader>y/Y/p maps also live in keymaps.lua as a fallback.
+opt.clipboard = "unnamedplus"
+vim.schedule(function()
+    pcall(vim.fn.getreg, "+")
+end)
 
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "

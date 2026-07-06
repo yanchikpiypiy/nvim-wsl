@@ -7,7 +7,7 @@ return {
     keys = {
         { "<leader>gv", "<cmd>DiffviewOpen<CR>",          desc = "Diffview open" },
         { "<leader>gV", "<cmd>DiffviewClose<CR>",         desc = "Diffview close" },
-        { "<leader>gh", "<cmd>DiffviewFileHistory %<CR>", desc = "File history (current)" },
+        { "<leader>gh", "<cmd>DiffviewFileHistory<CR>", desc = "File history (all files / repo)" },
     },
     config = function()
         require("diffview").setup()
