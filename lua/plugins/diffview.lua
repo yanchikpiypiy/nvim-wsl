@@ -7,9 +7,17 @@ return {
     keys = {
         { "<leader>gv", "<cmd>DiffviewOpen<CR>",          desc = "Diffview open" },
         { "<leader>gV", "<cmd>DiffviewClose<CR>",         desc = "Diffview close" },
-        { "<leader>gh", "<cmd>DiffviewFileHistory<CR>", desc = "File history (all files / repo)" },
+        { "<leader>gh", "<cmd>DiffviewFileHistory %<CR>", desc = "File history (current file)" },
+        { "<leader>gH", "<cmd>DiffviewFileHistory<CR>",   desc = "File history (all files / repo)" },
     },
     config = function()
-        require("diffview").setup()
+        require("diffview").setup({
+            -- file history opens several windows; `q` closes the WHOLE view at once
+            keymaps = {
+                view               = { { "n", "q", "<cmd>DiffviewClose<cr>", { desc = "Close Diffview" } } },
+                file_panel         = { { "n", "q", "<cmd>DiffviewClose<cr>", { desc = "Close Diffview" } } },
+                file_history_panel = { { "n", "q", "<cmd>DiffviewClose<cr>", { desc = "Close Diffview" } } },
+            },
+        })
     end,
 }

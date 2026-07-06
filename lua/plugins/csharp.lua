@@ -51,9 +51,7 @@ return {
                     vim.tbl_extend("force", o, { desc = "Workspace symbols" }))
                 map("n", "<leader>li", "<cmd>LspInfo<CR>",        vim.tbl_extend("force", o, { desc = "LSP info" }))
 
-                if client.supports_method("textDocument/inlayHint") then
-                    vim.lsp.inlay_hint.enable(true, { bufnr = args.buf })
-                end
+                -- Inlay hints disabled by default; toggle on with <leader>lh
             end,
         })
 

@@ -187,10 +187,6 @@ return {
                     ["TroubleCount"]      = { fg = c.accent, bold = true },
                     ["FidgetTitle"]       = { fg = c.accent, bold = true },
                     ["FidgetTask"]        = { fg = c.dim },
-                    -- illuminate: visible grey bg + underline on the symbol under cursor
-                    ["IlluminatedWordText"]  = { bg = "#3a3a3a", underline = true },
-                    ["IlluminatedWordRead"]  = { bg = "#3a3a3a", underline = true },
-                    ["IlluminatedWordWrite"] = { bg = "#43302f", underline = true },
                     -- flash: jump labels + matches (default label was orange)
                     ["FlashLabel"]   = { fg = "#0e0e0e", bg = "#e85c6a", bold = true },
                     ["FlashMatch"]   = { fg = "#eeeeee", bg = "#3a3a3a" },
