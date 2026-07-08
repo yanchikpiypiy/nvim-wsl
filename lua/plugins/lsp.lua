@@ -77,7 +77,7 @@ return {
         dependencies = {
             "williamboman/mason-lspconfig.nvim",
             "saghen/blink.cmp",
-            "nvim-telescope/telescope.nvim",
+            "folke/snacks.nvim",
         },
         config = function()
             local capabilities = require("blink.cmp").get_lsp_capabilities(
@@ -88,23 +88,30 @@ return {
             local on_attach = function(client, bufnr)
                 local map = vim.keymap.set
                 local o = { buffer = bufnr, silent = true }
-                local tb = require("telescope.builtin")
+                local sp = require("snacks").picker
 
-                -- Navigation (all via telescope for consistent preview)
+                -- Neovim 0.11+ ships default gr* LSP maps (grn/gra/grr/gri/grt),
+                -- which turn `gr` into a prefix so our `gr` waits for a 2nd key.
+                -- Remove them so our gd/gr/gi/gy scheme fires instantly.
+                for _, k in ipairs({ "grn", "gra", "grr", "gri", "grt" }) do
+                    pcall(vim.keymap.del, "n", k)
+                end
+
+                -- Navigation (all via snacks.picker for consistent preview)
                 map("n", "K",  vim.lsp.buf.hover, vim.tbl_extend("force", o, { desc = "Hover docs" }))
-                map("n", "gd", tb.lsp_definitions,          vim.tbl_extend("force", o, { desc = "Go to definition" }))
+                map("n", "gd", sp.lsp_definitions,          vim.tbl_extend("force", o, { desc = "Go to definition" }))
                 map("n", "gD", vim.lsp.buf.declaration,     vim.tbl_extend("force", o, { desc = "Go to declaration" }))
-                map("n", "gr", tb.lsp_references,           vim.tbl_extend("force", o, { desc = "Find references" }))
-                map("n", "gi", tb.lsp_implementations,      vim.tbl_extend("force", o, { desc = "Go to implementation" }))
-                map("n", "gy", tb.lsp_type_definitions,     vim.tbl_extend("force", o, { desc = "Go to type definition" }))
+                map("n", "gr", sp.lsp_references,           vim.tbl_extend("force", o, { desc = "Find references" }))
+                map("n", "gi", sp.lsp_implementations,      vim.tbl_extend("force", o, { desc = "Go to implementation" }))
+                map("n", "gy", sp.lsp_type_definitions,     vim.tbl_extend("force", o, { desc = "Go to type definition" }))
 
                 -- Refactoring
                 map("n", "<leader>rn", vim.lsp.buf.rename,       vim.tbl_extend("force", o, { desc = "Rename symbol" }))
                 map("n", "<leader>ca", vim.lsp.buf.code_action,  vim.tbl_extend("force", o, { desc = "Code action" }))
 
                 -- LSP navigation group (<leader>l)
-                map("n", "<leader>ls", tb.lsp_document_symbols,         vim.tbl_extend("force", o, { desc = "Document symbols" }))
-                map("n", "<leader>lw", tb.lsp_dynamic_workspace_symbols, vim.tbl_extend("force", o, { desc = "Workspace symbols" }))
+                map("n", "<leader>ls", sp.lsp_symbols,           vim.tbl_extend("force", o, { desc = "Document symbols" }))
+                map("n", "<leader>lw", sp.lsp_workspace_symbols, vim.tbl_extend("force", o, { desc = "Workspace symbols" }))
                 map("n", "<leader>li", "<cmd>LspInfo<CR>",               vim.tbl_extend("force", o, { desc = "LSP info" }))
 
                 -- Inlay hints (Neovim 0.10+): disabled by default, toggle on with <leader>lh

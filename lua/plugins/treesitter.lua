@@ -17,7 +17,7 @@ return {
 
         -- main branch: highlighting is NOT auto-enabled. Start it per buffer
         -- whenever a parser exists for the file's language. This also makes
-        -- Telescope's preview use treesitter highlights.
+        -- the picker's preview use treesitter highlights.
         vim.api.nvim_create_autocmd("FileType", {
             callback = function(args)
                 local lang = vim.treesitter.language.get_lang(vim.bo[args.buf].filetype)

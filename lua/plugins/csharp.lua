@@ -7,7 +7,25 @@ return {
             vim.lsp.protocol.make_client_capabilities()
         )
 
+        -- roslyn.nvim's default cmd expects `Microsoft.CodeAnalysis.LanguageServer`
+        -- on PATH. Our server is the Mason `roslyn` package, so launch its dll
+        -- directly with dotnet. Launching the dll (not Mason's roslyn.cmd shim)
+        -- is robust on Windows, where libuv can't exec a .cmd directly.
+        local roslyn_dll = vim.fs.joinpath(
+            vim.fn.stdpath("data"), "mason", "packages", "roslyn", "libexec",
+            "Microsoft.CodeAnalysis.LanguageServer.dll"
+        )
+        local roslyn_cmd = vim.uv.fs_stat(roslyn_dll)
+            and {
+                "dotnet", roslyn_dll,
+                "--logLevel=Information",
+                "--extensionLogDirectory=" .. vim.fn.stdpath("log"),
+                "--stdio",
+            }
+            or nil -- fall back to roslyn.nvim's default if the dll isn't there
+
         vim.lsp.config("roslyn", {
+            cmd = roslyn_cmd,
             capabilities = capabilities,
             settings = {
                 ["csharp|inlay_hints"] = {
@@ -38,16 +56,22 @@ return {
 
                 local map = vim.keymap.set
                 local o   = { buffer = args.buf, silent = true }
-                local tb = require("telescope.builtin")
+                local sp = require("snacks").picker
 
-                map("n", "gd", tb.lsp_definitions,                vim.tbl_extend("force", o, { desc = "Go to definition" }))
-                map("n", "gr", tb.lsp_references,                 vim.tbl_extend("force", o, { desc = "Find references" }))
-                map("n", "gi", tb.lsp_implementations,            vim.tbl_extend("force", o, { desc = "Go to implementation" }))
-                map("n", "gy", tb.lsp_type_definitions,           vim.tbl_extend("force", o, { desc = "Go to type definition" }))
+                -- Drop Neovim's default gr* LSP maps so `gr` isn't a prefix
+                -- (otherwise `gr` waits for a second key before firing).
+                for _, k in ipairs({ "grn", "gra", "grr", "gri", "grt" }) do
+                    pcall(vim.keymap.del, "n", k)
+                end
+
+                map("n", "gd", sp.lsp_definitions,                vim.tbl_extend("force", o, { desc = "Go to definition" }))
+                map("n", "gr", sp.lsp_references,                 vim.tbl_extend("force", o, { desc = "Find references" }))
+                map("n", "gi", sp.lsp_implementations,            vim.tbl_extend("force", o, { desc = "Go to implementation" }))
+                map("n", "gy", sp.lsp_type_definitions,           vim.tbl_extend("force", o, { desc = "Go to type definition" }))
                 map("n", "<leader>rn", vim.lsp.buf.rename,        vim.tbl_extend("force", o, { desc = "Rename symbol" }))
                 map("n", "<leader>ca", vim.lsp.buf.code_action,   vim.tbl_extend("force", o, { desc = "Code action" }))
-                map("n", "<leader>ls", tb.lsp_document_symbols,   vim.tbl_extend("force", o, { desc = "Document symbols" }))
-                map("n", "<leader>lw", tb.lsp_dynamic_workspace_symbols,
+                map("n", "<leader>ls", sp.lsp_symbols,            vim.tbl_extend("force", o, { desc = "Document symbols" }))
+                map("n", "<leader>lw", sp.lsp_workspace_symbols,
                     vim.tbl_extend("force", o, { desc = "Workspace symbols" }))
                 map("n", "<leader>li", "<cmd>LspInfo<CR>",        vim.tbl_extend("force", o, { desc = "LSP info" }))
 

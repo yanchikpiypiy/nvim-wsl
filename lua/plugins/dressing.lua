@@ -1,5 +1,5 @@
 -- Prettier vim.ui.input prompts (rename, code-action input, etc.).
--- select is left disabled so your existing telescope-ui-select keeps handling
+-- select is left disabled so snacks.picker (picker.ui_select) keeps handling
 -- vim.ui.select menus (avoids two plugins fighting over it).
 return {
     "stevearc/dressing.nvim",

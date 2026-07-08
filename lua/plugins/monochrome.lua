@@ -24,7 +24,7 @@ return {
                     hint    = "#7e8a96",  -- LSP inlay hints (cool grey, own tone)
                     -- ui / chrome
                     bg      = "#0e0e0e",
-                    panel   = "#161616",  -- float / telescope background
+                    panel   = "#161616",  -- float / picker background
                     raised  = "#1d1d1d",  -- prompt / scrollbar
                     sel     = "#2a2a2a",  -- selection background
                     border  = "#3a3a3a",
@@ -135,18 +135,24 @@ return {
                     ["BlinkCmpGhostText"] = { fg = "#6a6a6a", italic = true },
                     ["NonText"]           = { fg = "#3a3a3a" },
                     ["ComplHint"]         = { fg = "#6a6a6a", italic = true },
-                    -- ---- Telescope ----
-                    ["TelescopeNormal"]         = { fg = c.fg, bg = c.panel },
-                    ["TelescopeBorder"]         = { fg = c.border, bg = c.panel },
-                    ["TelescopePromptNormal"]   = { fg = c.fg, bg = c.raised },
-                    ["TelescopePromptBorder"]   = { fg = c.raised, bg = c.raised },
-                    ["TelescopePromptPrefix"]   = { fg = c.accent, bg = c.raised },
-                    ["TelescopePromptTitle"]    = { fg = c.bg, bg = c.accent, bold = true },
-                    ["TelescopeResultsTitle"]   = { fg = c.panel, bg = c.panel },
-                    ["TelescopePreviewTitle"]   = { fg = c.bg, bg = c.dim, bold = true },
-                    ["TelescopeSelection"]      = { bg = c.sel, bold = true },
-                    ["TelescopeSelectionCaret"] = { fg = c.accent, bg = c.sel },
-                    ["TelescopeMatching"]       = { fg = c.accent, bold = true },
+                    -- ---- snacks.picker ----
+                    ["SnacksPickerNormal"]        = { fg = c.fg, bg = c.panel },
+                    ["SnacksPickerBorder"]        = { fg = c.border, bg = c.panel },
+                    ["SnacksPickerTitle"]         = { fg = c.bg, bg = c.accent, bold = true },
+                    ["SnacksPickerFooter"]        = { fg = c.dim, bg = c.panel },
+                    ["SnacksPickerPrompt"]        = { fg = c.accent, bg = c.panel },
+                    ["SnacksPickerInput"]         = { fg = c.fg, bg = c.raised },
+                    ["SnacksPickerInputBorder"]   = { fg = c.raised, bg = c.raised },
+                    ["SnacksPickerInputSearch"]   = { fg = c.accent, bg = c.raised },
+                    ["SnacksPickerList"]          = { fg = c.fg, bg = c.panel },
+                    ["SnacksPickerListBorder"]    = { fg = c.border, bg = c.panel },
+                    ["SnacksPickerPreview"]       = { fg = c.fg, bg = c.panel },
+                    ["SnacksPickerPreviewBorder"] = { fg = c.border, bg = c.panel },
+                    ["SnacksPickerPreviewTitle"]  = { fg = c.bg, bg = c.dim, bold = true },
+                    ["SnacksPickerMatch"]         = { fg = c.accent, bold = true },
+                    ["SnacksPickerSelected"]      = { fg = c.accent },
+                    ["SnacksPickerDir"]           = { fg = c.dim },
+                    ["SnacksPickerCursorLine"]    = { bg = c.sel, bold = true },
                     -- ---- diagnostics ----
                     ["DiagnosticError"] = { fg = c.err },
                     ["DiagnosticWarn"]  = { fg = c.warn },
