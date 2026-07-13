@@ -18,7 +18,7 @@ return {
         local roslyn_cmd = vim.uv.fs_stat(roslyn_dll)
             and {
                 "dotnet", roslyn_dll,
-                "--logLevel=Information",
+                "--logLevel=Warning",
                 "--extensionLogDirectory=" .. vim.fn.stdpath("log"),
                 "--stdio",
             }

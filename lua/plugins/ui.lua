@@ -17,6 +17,9 @@ return {
                 { "<leader>d", group = "Diagnostics" },
                 { "<leader>c", group = "Config" },
                 { "<leader>x", group = "Trouble" },
+                { "<leader>n", group = "dotNet" },
+                { "<leader>nt", group = "Test" },
+                { "<leader>nd", group = "Debug" },
             })
         end,
     },
