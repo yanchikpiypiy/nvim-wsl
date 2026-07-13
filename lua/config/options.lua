@@ -11,7 +11,9 @@ opt.tabstop = 4
 opt.smartindent = true
 opt.signcolumn = "yes"
 opt.termguicolors = true
-opt.fileformats = { "unix" }
+-- Prefer LF, but auto-detect and consume CRLF (dos) so SDK/decompiled
+-- metadata sources don't render every line ending as a literal ^M.
+opt.fileformats = { "unix", "dos" }
 opt.updatetime = 250
 opt.timeoutlen = 300
 -- System clipboard: auto-sync every yank to the + register.
