@@ -1,0 +1,9 @@
+# Let git decide what's text, and always store/checkout text as LF.
+# This stops CRLF/LF flips from ever showing as "modified".
+* text=auto eol=lf
+
+# Explicit for the file types in this config (belt and braces).
+*.lua   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.vim   text eol=lf
