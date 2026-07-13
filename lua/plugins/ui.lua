@@ -18,8 +18,10 @@ return {
                 { "<leader>c", group = "Config" },
                 { "<leader>x", group = "Trouble" },
                 { "<leader>n", group = "dotNet" },
-                { "<leader>nt", group = "Test" },
+                { "<leader>nt", group = "Test (C#)" },
                 { "<leader>nd", group = "Debug" },
+                { "<leader>t", group = "Test (JS/TS)" },
+                { "<leader>j", group = "package.json" },
             })
         end,
     },
@@ -28,6 +30,8 @@ return {
     {
         "akinsho/toggleterm.nvim",
         version = "*",
+        keys = { [[<c-\>]] },
+        cmd = "ToggleTerm",
         config = function()
             require("toggleterm").setup({
                 size = 20,
@@ -41,6 +45,7 @@ return {
     -- LSP progress indicator
     {
         "j-hui/fidget.nvim",
+        event = "LspAttach", -- only shows LSP progress; no need before an LSP attaches
         config = function()
             require("fidget").setup({})
         end,

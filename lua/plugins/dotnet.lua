@@ -20,21 +20,20 @@ return {
             picker = "snacks",
 
             test_runner = {
+                -- C# tests use easy-dotnet's OWN runner (cleaner + more reliable
+                -- discovery than routing C# through neotest). neotest handles the
+                -- frontend (TS) only. Best-of-both instead of forced unification.
                 auto_start_testrunner = true,
-                neotest_integration = false, -- flip to true only if we add neotest
+                neotest_integration = false,
                 viewmode = "float",
                 mappings = {
-                    -- INSIDE THE RUNNER WINDOW: plain keys. These are buffer-local
-                    -- to the runner float, so they CANNOT touch your global maps.
-                    -- <CR> opens the selected test's source file.
+                    -- Runner window (buffer-local, plain keys): open with <leader>ntt
                     run             = { lhs = "r",    desc = "run test" },
                     run_all         = { lhs = "R",    desc = "run all tests" },
                     debug_test      = { lhs = "d",    desc = "debug test" },
                     go_to_file      = { lhs = "gd",   desc = "go to source" },
                     peek_stacktrace = { lhs = "p",    desc = "peek stacktrace" },
-                    -- INSIDE A TEST SOURCE FILE: these defaulted to <leader>r/d/p/t
-                    -- and shadowed your rename/diagnostics/paste maps. Nested under
-                    -- <leader>nt (Test) so they never collide with your config.
+                    -- In a C# test source file (nested under <leader>nt = dotnet Test)
                     run_test_from_buffer         = { lhs = "<leader>ntr", desc = "run test at cursor" },
                     debug_test_from_buffer       = { lhs = "<leader>ntd", desc = "debug test at cursor" },
                     run_all_tests_from_buffer    = { lhs = "<leader>nta", desc = "run all tests in file" },
@@ -49,9 +48,8 @@ return {
             },
         })
 
-        -- All maps live under <leader>n ("dotNet") so nothing collides with your
-        -- existing config. Sub-groups: <leader>nt = Test, <leader>nd = Debug.
-        -- The runner *window* uses plain keys (r/R/d/<CR>/p) — buffer-local only.
+        -- dotnet maps under <leader>n ("dotNet"). C# TESTS = <leader>nt (Test),
+        -- Debug = <leader>nd. Frontend (TS) tests are neotest under <leader>t.
         local map = vim.keymap.set
         map("n", "<leader>nr",  "<cmd>Dotnet run<cr>",         { desc = "Run project" })
         map("n", "<leader>nb",  "<cmd>Dotnet build<cr>",       { desc = "Build" })
@@ -76,12 +74,16 @@ return {
                 local file = vim.fn.expand("%:p")
                 dir = file ~= "" and vim.fs.dirname(file) or vim.fn.getcwd()
             end
-            require("easy-dotnet.actions.new").create_new_item(dir)
+            -- create_new_item uses a coroutine-based picker (pick_sync yields),
+            -- so it must run inside a coroutine — a direct call from the keymap
+            -- errors with "attempt to yield across C-call boundary".
+            coroutine.wrap(function()
+                require("easy-dotnet.actions.new").create_new_item(dir)
+            end)()
         end, { desc = ".NET new file (here)" })
 
-        -- In the test-runner window, make <CR> also open the source (in addition
-        -- to `gd`). Both are buffer-local to that float, so neither touches your
-        -- global `gd` (go-to-definition) or anything else.
+        -- In the runner window, <CR> also opens the test's source (like `gd`).
+        -- Buffer-local to that float, so it doesn't touch your global maps.
         vim.api.nvim_create_autocmd("FileType", {
             pattern = "easy-dotnet",
             callback = function(ev)
