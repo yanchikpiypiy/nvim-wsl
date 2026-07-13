@@ -47,6 +47,8 @@ end
 return {
     {
         "williamboman/mason.nvim",
+        cmd = { "Mason", "MasonInstall", "MasonUpdate", "MasonUninstall", "MasonLog" },
+        event = { "BufReadPre", "BufNewFile" },
         config = function()
             require("mason").setup({
                 registries = {
@@ -59,6 +61,7 @@ return {
     {
         -- Bridges Mason and lspconfig: ensures servers are installed before they start
         "williamboman/mason-lspconfig.nvim",
+        event = { "BufReadPre", "BufNewFile" },
         dependencies = { "williamboman/mason.nvim" },
         config = function()
             require("mason-lspconfig").setup({
@@ -74,6 +77,7 @@ return {
     },
     {
         "neovim/nvim-lspconfig",
+        event = { "BufReadPre", "BufNewFile" },
         dependencies = {
             "williamboman/mason-lspconfig.nvim",
             "saghen/blink.cmp",

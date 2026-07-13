@@ -2,7 +2,7 @@ return {
     -- Ensure devicons is set up before neo-tree
     {
         "nvim-tree/nvim-web-devicons",
-        lazy = false,
+        lazy = true, -- loads on demand as a dependency of neo-tree/lualine/trouble
         config = function()
             require("nvim-web-devicons").setup({ default = true })
         end,

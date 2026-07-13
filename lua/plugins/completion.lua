@@ -2,6 +2,7 @@ return {
     -- Snippets engine
     {
         "L3MON4D3/LuaSnip",
+        event = "InsertEnter", -- off startup; blink also pulls it when completing
         dependencies = { "rafamadriz/friendly-snippets" },
         config = function()
             require("luasnip.loaders.from_vscode").lazy_load()
@@ -17,10 +18,7 @@ return {
         end,
     },
 
-    -- Copilot source for blink
-    { "giuxtaposition/blink-cmp-copilot" },
-
-    -- Completion
+    -- Completion (blink pulls in LuaSnip + blink-cmp-copilot as dependencies)
     {
         "saghen/blink.cmp",
         dependencies = {

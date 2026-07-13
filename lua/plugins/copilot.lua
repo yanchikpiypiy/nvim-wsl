@@ -1,6 +1,6 @@
 return {
     "zbirenbaum/copilot.lua",
-    lazy = false,
+    event = "InsertEnter", -- only consumed by blink completion; keep off startup
     config = function()
         require("copilot").setup({
             suggestion = { enabled = false },

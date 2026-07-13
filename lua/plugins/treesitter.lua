@@ -8,11 +8,19 @@ return {
 
         -- main branch: `ensure_installed` is gone; install parsers explicitly.
         -- (Compiling these requires the `tree-sitter` CLI on PATH.)
-        require("nvim-treesitter").install({
-            "c", "cpp",
-            "javascript", "typescript", "tsx", "html", "css",
-            "lua", "vim", "vimdoc",
-            "c_sharp", "markdown", "markdown_inline",
+        -- Run it AFTER startup (VeryLazy) so parser checks/compiles don't sit on
+        -- the launch hot path. Already-installed parsers are skipped.
+        vim.api.nvim_create_autocmd("User", {
+            pattern = "VeryLazy",
+            once = true,
+            callback = function()
+                require("nvim-treesitter").install({
+                    "c", "cpp",
+                    "javascript", "typescript", "tsx", "html", "css",
+                    "lua", "vim", "vimdoc",
+                    "c_sharp", "markdown", "markdown_inline",
+                })
+            end,
         })
 
         -- main branch: highlighting is NOT auto-enabled. Start it per buffer
