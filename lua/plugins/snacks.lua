@@ -8,6 +8,20 @@ local function root()
     return vim.fs.root(dir, ".git") or vim.fn.getcwd()
 end
 
+-- Return the first existing subdir of the repo root from a candidate list,
+-- falling back to the repo root. Lets us scope searches to frontend/backend
+-- (e.g. cris-erm/app and cris-erm/api) instead of the whole repo.
+local function sub(candidates)
+    local r = root()
+    for _, c in ipairs(candidates) do
+        local p = vim.fs.joinpath(r, c)
+        if vim.fn.isdirectory(p) == 1 then return p end
+    end
+    return r
+end
+local function fe_dir() return sub({ "app", "frontend", "web", "client", "ui" }) end
+local function be_dir() return sub({ "api", "backend", "server", "src" }) end
+
 return {
     "folke/snacks.nvim",
     priority = 1000,
@@ -36,6 +50,11 @@ return {
         { "<leader>fs", function() Snacks.picker.files({ cwd = root() }) end, desc = "Find files (current repo)" },
         { "<leader>ff", function() Snacks.picker.smart({ cwd = root() }) end, desc = "Smart find (recent + files)" },
         { "<leader>fg", function() Snacks.picker.grep({ cwd = root() }) end,  desc = "Live grep (current repo)" },
+        -- Scoped to frontend (app/) vs backend (api/) — split search
+        { "<leader>fe", function() Snacks.picker.files({ cwd = fe_dir() }) end, desc = "Find files (frontend)" },
+        { "<leader>fa", function() Snacks.picker.files({ cwd = be_dir() }) end, desc = "Find files (backend/api)" },
+        { "<leader>fE", function() Snacks.picker.grep({ cwd = fe_dir() }) end,  desc = "Live grep (frontend)" },
+        { "<leader>fA", function() Snacks.picker.grep({ cwd = be_dir() }) end,  desc = "Live grep (backend/api)" },
         -- Whole cwd tree (all repos) when you actually want it
         { "<leader>fS", function() Snacks.picker.files() end, desc = "Find files (all / cwd)" },
         { "<leader>fG", function() Snacks.picker.grep() end,  desc = "Live grep (all / cwd)" },

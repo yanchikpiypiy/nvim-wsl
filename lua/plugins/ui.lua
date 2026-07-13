@@ -20,7 +20,6 @@ return {
                 { "<leader>n", group = "dotNet" },
                 { "<leader>nt", group = "Test (C#)" },
                 { "<leader>nd", group = "Debug" },
-                { "<leader>t", group = "Test (JS/TS)" },
                 { "<leader>j", group = "package.json" },
             })
         end,
