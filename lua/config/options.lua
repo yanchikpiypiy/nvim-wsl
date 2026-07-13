@@ -56,7 +56,12 @@ vim.api.nvim_create_autocmd("InsertLeave", {
         if bo.buftype ~= "" or bo.readonly or not bo.modifiable then return end
         if vim.api.nvim_buf_get_name(bufnr) == "" then return end
         if bo.modified then
+            -- Skip format-on-save for this auto-write (prettier on every
+            -- InsertLeave is what made the frontend feel laggy). Explicit :w
+            -- and <leader>f still format.
+            vim.b[bufnr].skip_format_on_save = true
             pcall(vim.cmd, "silent write")
+            vim.b[bufnr].skip_format_on_save = false
         end
     end,
 })

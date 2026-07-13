@@ -22,9 +22,11 @@ return {
             typescript         = { "prettier" },
             typescriptreact    = { "prettier" },
         },
-        format_on_save = {
-            timeout_ms = 500,
-            lsp_fallback = true,
-        },
+        format_on_save = function(bufnr)
+            -- Auto-writes (InsertLeave) set this to avoid running prettier on
+            -- every insert-leave (the frontend-lag culprit). Explicit :w formats.
+            if vim.b[bufnr].skip_format_on_save then return nil end
+            return { timeout_ms = 500, lsp_fallback = true }
+        end,
     },
 }

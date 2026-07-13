@@ -12,8 +12,12 @@ return {
         },
     },
     keys = {
-        { "s", mode = { "n", "x", "o" }, function() require("flash").jump() end,       desc = "Flash" },
-        { "S", mode = { "n", "x", "o" }, function() require("flash").treesitter() end,  desc = "Flash Treesitter" },
+        -- Normal + visual only (NOT operator-pending): in op-pending, `s` would
+        -- hijack nvim-surround's ds/cs/ys after a slight pause. Flash jump still
+        -- works from normal mode; use it then operate, or `r`/`R` below for
+        -- flash-as-motion.
+        { "s", mode = { "n", "x" }, function() require("flash").jump() end,       desc = "Flash" },
+        { "S", mode = { "n", "x" }, function() require("flash").treesitter() end,  desc = "Flash Treesitter" },
         { "r", mode = "o",               function() require("flash").remote() end,      desc = "Remote Flash" },
         { "R", mode = { "o", "x" },       function() require("flash").treesitter_search() end, desc = "Treesitter Search" },
     },
