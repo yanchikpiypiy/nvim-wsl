@@ -18,9 +18,11 @@ return {
                 { "<leader>c", group = "Config" },
                 { "<leader>x", group = "Trouble" },
                 { "<leader>n", group = "dotNet" },
+                { "<leader>m", group = "Make (C++)" },
                 { "<leader>nt", group = "Test (C#)" },
                 { "<leader>nd", group = "Debug" },
                 { "<leader>j", group = "package.json" },
+                { "<leader>u", group = "UI" },
             })
         end,
     },

@@ -119,7 +119,7 @@ return {
                 map("n", "<leader>li", "<cmd>LspInfo<CR>",               vim.tbl_extend("force", o, { desc = "LSP info" }))
 
                 -- Inlay hints (Neovim 0.10+): disabled by default, toggle on with <leader>lh
-                if vim.lsp.inlay_hint and client.supports_method("textDocument/inlayHint") then
+                if vim.lsp.inlay_hint and client:supports_method("textDocument/inlayHint") then
                     map("n", "<leader>lh", function()
                         vim.lsp.inlay_hint.enable(
                             not vim.lsp.inlay_hint.is_enabled({ bufnr = bufnr }),

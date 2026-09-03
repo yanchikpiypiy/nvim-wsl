@@ -29,6 +29,7 @@ return {
     opts = {
         picker = {
             ui_select = true, -- route vim.ui.select (code actions) through the picker
+            previewers = { diff = { builtin = false, cmd = { "delta" } } },
             sources = {
                 files = {
                     hidden = true, -- show dotfiles (gitignored still excluded)
@@ -74,5 +75,18 @@ return {
         { "<leader>gC", function() Snacks.picker.git_log_file() end, desc = "Git commits (this file)" },
         { "<leader>gl", function() Snacks.picker.git_branches() end, desc = "Git branches" },
         { "<leader>gz", function() Snacks.picker.git_stash() end,    desc = "Git stash" },
+        -- Hunk lists rendered through delta (j/k = next/prev hunk, preview on the right).
+        -- gv: uncommitted hunks (Tab stages the hunk under the cursor).
+        -- gm: hunks this branch changed vs main (merge-base, like main...HEAD).
+        -- Side-by-side buffer diffs of the same are :DiffviewOpen / :DiffviewOpen main...HEAD.
+        { "<leader>gv", function() Snacks.picker.git_diff() end, desc = "Hunks: uncommitted" },
+        {
+            "<leader>gm",
+            function()
+                local base = require("config.gitutil").main_base()
+                if base then Snacks.picker.git_diff({ base = base }) end
+            end,
+            desc = "Hunks: branch vs main",
+        },
     },
 }

@@ -7,8 +7,12 @@ map("n", "<Esc>", "<Cmd>noh<CR>", { silent = true })
 -- Diagnostics
 -- ===============================
 map("n", "<leader>d", vim.diagnostic.open_float, vim.tbl_extend("force", opts, { desc = "Show Diagnostics" }))
-map("n", "[d", vim.diagnostic.goto_prev, vim.tbl_extend("force", opts, { desc = "Previous Diagnostic" }))
-map("n", "]d", vim.diagnostic.goto_next, vim.tbl_extend("force", opts, { desc = "Next Diagnostic" }))
+-- jump() replaces the removed goto_prev/goto_next; float=true keeps their
+-- old behaviour of popping the message on arrival.
+map("n", "[d", function() vim.diagnostic.jump({ count = -1, float = true }) end,
+    vim.tbl_extend("force", opts, { desc = "Previous Diagnostic" }))
+map("n", "]d", function() vim.diagnostic.jump({ count = 1, float = true }) end,
+    vim.tbl_extend("force", opts, { desc = "Next Diagnostic" }))
 map("n", "<leader>xx", vim.diagnostic.setloclist, vim.tbl_extend("force", opts, { desc = "Set Location List" }))
 
 map("n", "<leader>vs", "<cmd>luafile %<CR>", vim.tbl_extend("force", opts, { desc = "Reload current config file" }))
@@ -19,6 +23,10 @@ map("n", "<leader>lh", function()
     vim.lsp.inlay_hint.enable(not enabled, { bufnr = 0 })
     vim.notify(enabled and "Inlay hints off" or "Inlay hints on", vim.log.levels.INFO)
 end, vim.tbl_extend("force", opts, { desc = "Toggle inlay hints" }))
+
+-- Theme picker (live preview while hovering; Esc restores)
+map("n", "<leader>ut", function() require("config.theme").pick() end,
+    vim.tbl_extend("force", opts, { desc = "Pick theme" }))
 
 -- Buffer navigation
 map("n", "[b", "<cmd>bprev<CR>", vim.tbl_extend("force", opts, { desc = "Prev buffer" }))

@@ -5,8 +5,9 @@ return {
     dependencies = { "nvim-lua/plenary.nvim" },
     cmd = { "DiffviewOpen", "DiffviewClose", "DiffviewFileHistory", "DiffviewToggleFiles" },
     keys = {
-        { "<leader>gv", "<cmd>DiffviewOpen<CR>",          desc = "Diffview open" },
-        { "<leader>gV", "<cmd>DiffviewClose<CR>",         desc = "Diffview close" },
+        -- Hunk-level diffs live on <leader>gv / <leader>gm (snacks + delta).
+        -- Diffview is kept for what a hunk list can't do: per-file history and
+        -- side-by-side editing (:DiffviewOpen, :DiffviewOpen main...HEAD; q closes).
         { "<leader>gh", "<cmd>DiffviewFileHistory %<CR>", desc = "File history (current file)" },
         { "<leader>gH", "<cmd>DiffviewFileHistory<CR>",   desc = "File history (all files / repo)" },
     },

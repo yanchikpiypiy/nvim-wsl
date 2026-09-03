@@ -27,6 +27,7 @@ nvim-dap + dap-ui.
 | `<leader>y` / `<leader>Y` | Yank selection / line to system clipboard |
 | `<leader>p` | Paste from system clipboard |
 | `<leader>vs` | Reload the current config file |
+| `<leader>ut` | Theme picker — hover previews live, `<CR>` keeps it, `<Esc>` reverts (`:Theme <id>` too) |
 | `<leader>f` | Format buffer (conform) — note: also the file-picker prefix |
 
 ### Motion / editing
@@ -105,10 +106,30 @@ nvim-dap + dap-ui.
 | `<leader>gp` | Preview hunk |
 | `<leader>gb` / `<leader>gB` | Blame line / toggle line blame |
 | `<leader>gd` | Diff this (gitsigns) |
-| `<leader>gv` / `<leader>gV` | Diffview open / close |
+| `<leader>gv` / `<leader>gV` | Diffview open / close (uncommitted changes) |
+| `<leader>gm` | Diffview: this branch vs `main` (`main...HEAD`, falls back to master/origin) |
 | `<leader>gh` / `<leader>gH` | File history (current / all) |
 | `]c` / `[c` | Next / previous hunk |
 | `ih` | Select hunk (text object) |
+| diffview window | `]c`/`[c` hunks · `<Tab>`/`<S-Tab>` files · `<leader>e` file list · `do` take other side · `q` close |
+
+Git pickers (`gt`/`gc`/`gC`/`gz`) preview diffs through **delta** (`previewers.diff` in
+`snacks.lua`); same rendering as `git diff` in the shell and in lazygit.
+
+### Build — C/C++ via CMake (`<leader>m`, `lua/config/cppbuild.lua`)
+| Key | Action |
+|-----|--------|
+| `<leader>mb` | Build (async; saves all buffers first). Errors → quickfix; Trouble opens on failure |
+| `<leader>mq` | Toggle the build error list (Trouble quickfix) |
+| `]q` / `[q` | Next / previous build error (wraps) |
+| `<leader>md` | Pick build dir when a project has several (remembered per project for the session) |
+| `:make` | Same build, classic command (makeprg is set per C/C++ buffer) |
+
+Project root = topmost dir with `CMakeLists.txt` above the file. Candidate build dirs are
+`build*` folders containing `CMakeCache.txt` (i.e. already configured); default is `build`,
+else the first alphabetically. Output is parsed with the default `errorformat` (gcc/clang/ld),
+so cmake/ninja progress lines are dropped. `<leader>xx` is clangd's live analysis of open
+files; `<leader>mb` is the real compiler + linker.
 
 ### .NET — easy-dotnet (`<leader>n`)
 | Key | Action |
@@ -167,6 +188,17 @@ Run from a terminal (the suite is slow + pnpm, so no in-editor plugin):
 | insert: `<C-x>` `<C-e>` `<CR>` `<Tab>` `<S-Tab>` | completion: show · cancel · accept · next/snippet · prev |
 
 ---
+
+## Themes
+- `<leader>ut` / `:Theme` opens the picker. Entries are tagged **plugin** (gruvbox,
+  everforest) or **custom** (hand-rolled). Hovering previews live; `<CR>` saves the
+  choice to `~/.local/state/nvim/theme`, `<Esc>` reverts.
+- Plugin themes are listed in `lua/config/theme.lua` (`M.plugins`).
+- Custom themes live one-per-file in `lua/themes/`. A file returns
+  `{ name, desc, base?, background?, highlights = function() return { Group = spec } end }`.
+  `base` names a plugin colorscheme to paint over (Monochrome uses `monochrome.nvim`);
+  leave it out to start from Neovim's defaults. Drop a file in and it shows up in the picker.
+  `:ThemeReload` re-reads the current custom file after you edit it.
 
 ## Notes
 - `<leader>f` is bound to **format** *and* is the prefix for the find group — pressing
