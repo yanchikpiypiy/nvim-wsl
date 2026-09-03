@@ -10,18 +10,19 @@ return {
         vim.api.nvim_create_autocmd("ColorScheme", {
             pattern = "monochrome",
             callback = function()
+                local p = require("config.palette")
                 local c = {
-                    -- syntax
-                    members = "#dd8a9c",  -- members / properties (soft red-pink)
-                    var     = "#eeeeee",  -- plain variables (white)
-                    func    = "#d8bdf3",  -- free functions (Spinel lavender, leaned pink so it's bright, not blue)
-                    method  = "#e85c6a",  -- class methods (red-pink)
-                    keyword = "#9a6dd7",  -- keywords / qualifiers / macros (dark purple)
-                    type    = "#a6a6a6",  -- types (light grey)
-                    number  = "#d6a06a",  -- numbers / booleans (amber)
-                    string  = "#d4d4d4",  -- strings (light grey)
-                    comment = "#5e5e5e",  -- comments (dim grey)
-                    hint    = "#7e8a96",  -- LSP inlay hints (cool grey, own tone)
+                    -- syntax (from the shared palette; see lua/config/palette.lua)
+                    members = p.member,    -- properties / fields
+                    var     = p.variable,  -- plain variables
+                    func    = p.func,      -- free functions / static methods
+                    method  = p.method,    -- class methods
+                    keyword = p.keyword,   -- keywords / qualifiers / macros
+                    type    = p.type,      -- types
+                    number  = p.constant,  -- numbers / booleans / constants
+                    string  = p.string,    -- strings
+                    comment = p.comment,   -- comments
+                    hint    = "#7e8a96",   -- LSP inlay hints (own tone, not a syntax color)
                     -- ui / chrome
                     bg      = "#0e0e0e",
                     panel   = "#161616",  -- float / picker background
