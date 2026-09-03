@@ -7,19 +7,22 @@ return {
     base = "monochrome",  -- plugin colorscheme (kdheepak/monochrome.nvim) we paint over
     background = "dark",
     highlights = function()
+        local p = require("config.palette")
         local c = {
-            -- syntax
-            members = "#dd8a9c",  -- members / properties (soft red-pink)
-            var     = "#eeeeee",  -- plain variables (white)
-            func    = "#d8bdf3",  -- free functions (Spinel lavender, leaned pink so it's bright, not blue)
-            method  = "#e85c6a",  -- class methods (red-pink)
-            keyword = "#9a6dd7",  -- keywords / qualifiers / macros (dark purple)
-            type    = "#F9E2AF",  -- types, generics / type parameters (Catppuccin Mocha yellow)
-            iface   = "#94e2d5",  -- interfaces (Catppuccin Mocha teal)
-            number  = "#d6a06a",  -- numbers / booleans (amber)
-            string  = "#d0ccc0",  -- strings (light grey with a hint of yellow)
-            comment = "#5e5e5e",  -- comments (dim grey)
-            hint    = "#7e8a96",  -- LSP inlay hints (cool grey, own tone)
+            -- syntax (shared palette, lua/config/palette.lua)
+            members = p.member,
+            var     = p.variable,
+            func    = p.func,
+            method  = p.method,
+            keyword = p.keyword,
+            type    = p.type,
+            iface   = p.interface,
+            number  = p.constant,
+            string  = p.string,
+            comment = p.comment,
+            ns      = p.namespace,
+            import  = p.import,
+            hint    = "#7e8a96",  -- LSP inlay hints (cool grey, own tone; not a syntax colour)
             -- ui / chrome
             bg      = "#0e0e0e",
             panel   = "#161616",  -- float / picker background
@@ -61,13 +64,16 @@ return {
             ["@keyword.repeat"]      = { fg = c.keyword },
             ["@keyword.operator"]    = { fg = c.keyword },
             ["@keyword.modifier"]    = { fg = c.keyword },
-            ["@keyword.directive"]   = { fg = c.keyword },
             ["@type.qualifier"]      = { fg = c.keyword },
             ["StorageClass"]         = { fg = c.keyword },
             ["@constant.macro"]      = { fg = c.keyword },
             ["@function.macro"]      = { fg = c.keyword },
-            ["Define"]               = { fg = c.keyword },
-            ["PreProc"]              = { fg = c.keyword },
+            -- #include and other preprocessor directives: steel blue. Macro names stay purple.
+            ["@keyword.import"]      = { fg = c.import },
+            ["@keyword.directive"]   = { fg = c.import },
+            ["Include"]              = { fg = c.import },
+            ["Define"]               = { fg = c.import },
+            ["PreProc"]              = { fg = c.import },
             ["Conditional"]          = { fg = c.keyword },
             ["Repeat"]               = { fg = c.keyword },
             ["Statement"]            = { fg = c.keyword },
@@ -92,9 +98,9 @@ return {
             ["@lsp.type.record"]        = { fg = c.type },
             -- namespaces (std::, YanMesh::): muted grey so routing noise recedes.
             -- Without this they inherit Structure's gold via the default @module link.
-            ["@module"]             = { fg = "#a6a6a6" },
-            ["@namespace"]          = { fg = "#a6a6a6" },
-            ["@lsp.type.namespace"] = { fg = "#a6a6a6" },
+            ["@module"]             = { fg = c.ns },
+            ["@namespace"]          = { fg = c.ns },
+            ["@lsp.type.namespace"] = { fg = c.ns },
             -- interfaces: mint, so a contract reads differently from a concrete type
             ["@lsp.type.interface"]     = { fg = c.iface },
             ["@type.interface"]         = { fg = c.iface },
@@ -215,30 +221,31 @@ return {
             ["FlashCurrent"] = { fg = "#0e0e0e", bg = "#d8bdf3", bold = true },
         }
 
-            -- Monochrome palette
-        local grey   = "#a6a6a6"  -- namespaces (recede)
-        local sage    = "#7fc9b0"  -- types (C#-only accent: bright teal-green, bold)
-        local red    = "#e85c6a"  -- methods
-        local lav     = "#d8bdf3"  -- functions
-        local pink    = "#dd8a9c"  -- properties / fields
-        local amber  = "#d6a06a"  -- constants / enum members
-        local white  = "#eeeeee"  -- variables / parameters
-        local purple  = "#9a6dd7"  -- keywords / control flow / preprocessor
-        local strgrey = "#d4d4d4"  -- strings
-        local comment = "#5e5e5e"  -- comments / excluded code / xml doc
+            -- Roslyn (C#) semantic tokens, same palette.
+        local grey    = p.namespace
+        local typ     = p.type
+        local iface   = p.interface
+        local red     = p.method
+        local lav     = p.func
+        local pink    = p.member
+        local amber   = p.constant
+        local white   = p.variable
+        local purple  = p.keyword
+        local strgrey = p.string
+        local comment = p.comment
 
         local hls = {
             -- Types
             ["@lsp.type.namespace.cs"]           = { fg = grey },
-            ["@lsp.type.type.cs"]                = { fg = sage, bold = true },
-            ["@lsp.type.class.cs"]               = { fg = sage, bold = true },
-            ["@lsp.type.interface.cs"]           = { fg = sage, bold = true },
-            ["@lsp.type.struct.cs"]              = { fg = sage, bold = true },
-            ["@lsp.type.enum.cs"]                = { fg = sage, bold = true },
-            ["@lsp.type.delegate.cs"]            = { fg = sage, bold = true },
-            ["@lsp.type.typeParameter.cs"]       = { fg = sage, bold = true },
-            ["@lsp.type.recordClass.cs"]         = { fg = sage, bold = true },
-            ["@lsp.type.recordStruct.cs"]        = { fg = sage, bold = true },
+            ["@lsp.type.type.cs"]                = { fg = typ, bold = true },
+            ["@lsp.type.class.cs"]               = { fg = typ, bold = true },
+            ["@lsp.type.interface.cs"]           = { fg = iface, bold = true },
+            ["@lsp.type.struct.cs"]              = { fg = typ, bold = true },
+            ["@lsp.type.enum.cs"]                = { fg = typ, bold = true },
+            ["@lsp.type.delegate.cs"]            = { fg = typ, bold = true },
+            ["@lsp.type.typeParameter.cs"]       = { fg = typ, bold = true },
+            ["@lsp.type.recordClass.cs"]         = { fg = typ, bold = true },
+            ["@lsp.type.recordStruct.cs"]        = { fg = typ, bold = true },
             -- Members
             ["@lsp.type.method.cs"]              = { fg = red },
             ["@lsp.type.extensionMethod.cs"]     = { fg = red },
@@ -253,10 +260,13 @@ return {
             ["@lsp.type.event.cs"]               = { fg = pink },
             ["@lsp.type.enumMember.cs"]          = { fg = amber },
             ["@lsp.type.constant.cs"]            = { fg = amber },
-            -- Variables
-            ["@lsp.type.variable.cs"]            = { fg = white },
+            -- Variables. `variable`/`local` stay EMPTY (transparent) so treesitter
+            -- shows through: on cold start Roslyn mislabels methods/types as
+            -- `variable`, and colouring that white hid treesitter's correct red
+            -- method call until the buffer was touched.
+            ["@lsp.type.variable.cs"]            = {},
             ["@lsp.type.parameter.cs"]           = { fg = white, italic = true },
-            ["@lsp.type.local.cs"]               = { fg = white },
+            ["@lsp.type.local.cs"]               = {},
             -- Keywords / control flow / preprocessor (Roslyn classifies these
             -- separately; they have no Neovim default link, so set explicitly)
             ["@lsp.type.keyword.cs"]             = { fg = purple },

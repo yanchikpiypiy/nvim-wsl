@@ -17,6 +17,10 @@ map("n", "<leader>xx", vim.diagnostic.setloclist, vim.tbl_extend("force", opts, 
 
 map("n", "<leader>vs", "<cmd>luafile %<CR>", vim.tbl_extend("force", opts, { desc = "Reload current config file" }))
 
+-- Notifications (snacks notifier)
+map("n", "<leader>un", function() require("snacks").notifier.show_history() end, vim.tbl_extend("force", opts, { desc = "Notification history" }))
+map("n", "<leader>ud", function() require("snacks").notifier.hide() end,          vim.tbl_extend("force", opts, { desc = "Dismiss notifications" }))
+
 -- Inlay hints toggle
 map("n", "<leader>lh", function()
     local enabled = vim.lsp.inlay_hint.is_enabled({ bufnr = 0 })
@@ -27,6 +31,10 @@ end, vim.tbl_extend("force", opts, { desc = "Toggle inlay hints" }))
 -- Theme picker (live preview while hovering; Esc restores)
 map("n", "<leader>ut", function() require("config.theme").pick() end,
     vim.tbl_extend("force", opts, { desc = "Pick theme" }))
+
+-- Palette tuner: pick a symbol kind, hover swatches, <CR> saves into palette.lua
+map("n", "<leader>up", function() require("config.palette_tuner").pick() end,
+    vim.tbl_extend("force", opts, { desc = "Tune palette colour" }))
 
 -- Buffer navigation
 map("n", "[b", "<cmd>bprev<CR>", vim.tbl_extend("force", opts, { desc = "Prev buffer" }))

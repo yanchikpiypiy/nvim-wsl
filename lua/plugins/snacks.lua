@@ -27,9 +27,18 @@ return {
     priority = 1000,
     lazy = false, -- load early so ui.select (code actions) is owned from startup
     opts = {
+        -- Toast notifications in the corner. Without this, every vim.notify /
+        -- Snacks.notify (e.g. "Stash applied", checkout, hunk staged, buffer
+        -- reloaded) only flashes once in the command line and is easy to miss,
+        -- so git actions feel like nothing happened. This surfaces them all.
+        notifier = {
+            enabled = true,
+            timeout = 3000,
+            style = "compact",
+        },
         picker = {
             ui_select = true, -- route vim.ui.select (code actions) through the picker
-            previewers = { diff = { builtin = false, cmd = { "delta" } } },
+            previewers = { diff = { style = "terminal", cmd = { "delta" } } },
             sources = {
                 files = {
                     hidden = true, -- show dotfiles (gitignored still excluded)
@@ -71,17 +80,20 @@ return {
         -- Git pickers
         { "<leader>gf", function() Snacks.picker.git_files() end,    desc = "Git files (tracked)" },
         { "<leader>gt", function() Snacks.picker.git_status() end,   desc = "Git status (changed files)" },
+        -- Select a branch (Enter checks it out) or a commit here, then hit
+        -- <leader>grl to review its files (config/review.lua).
         { "<leader>gc", function() Snacks.picker.git_log() end,      desc = "Git commits (log)" },
         { "<leader>gC", function() Snacks.picker.git_log_file() end, desc = "Git commits (this file)" },
         { "<leader>gl", function() Snacks.picker.git_branches() end, desc = "Git branches" },
         { "<leader>gz", function() Snacks.picker.git_stash() end,    desc = "Git stash" },
         -- Hunk lists rendered through delta (j/k = next/prev hunk, preview on the right).
         -- gv: uncommitted hunks (Tab stages the hunk under the cursor).
-        -- gm: hunks this branch changed vs main (merge-base, like main...HEAD).
-        -- Side-by-side buffer diffs of the same are :DiffviewOpen / :DiffviewOpen main...HEAD.
+        -- gV: hunks this branch changed vs main (merge-base, like main...HEAD).
+        -- In-buffer review of the same (gitsigns base = main, ]c/[c) is <leader>gm / <leader>gn.
+        -- Side-by-side buffer diffs are :DiffviewOpen / :DiffviewOpen main...HEAD.
         { "<leader>gv", function() Snacks.picker.git_diff() end, desc = "Hunks: uncommitted" },
         {
-            "<leader>gm",
+            "<leader>gV",
             function()
                 local base = require("config.gitutil").main_base()
                 if base then Snacks.picker.git_diff({ base = base }) end

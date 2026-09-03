@@ -28,6 +28,7 @@ nvim-dap + dap-ui.
 | `<leader>p` | Paste from system clipboard |
 | `<leader>vs` | Reload the current config file |
 | `<leader>ut` | Theme picker — hover previews live, `<CR>` keeps it, `<Esc>` reverts (`:Theme <id>` too) |
+| `<leader>up` | Palette tuner — pick a symbol kind, hover swatches (live), `<CR>` saves to `palette.lua` (`:Palette`) |
 | `<leader>f` | Format buffer (conform) — note: also the file-picker prefix |
 
 ### Motion / editing
@@ -103,18 +104,31 @@ nvim-dap + dap-ui.
 | `<leader>gl` / `<leader>gz` | Branches / stash |
 | `<leader>gs` / `<leader>gS` | Stage hunk / buffer |
 | `<leader>gR` | Reset hunk |
-| `<leader>gp` | Preview hunk |
+| `<leader>gp` / `<leader>gP` | Preview hunk (float / inline) |
 | `<leader>gb` / `<leader>gB` | Blame line / toggle line blame |
 | `<leader>gd` | Diff this (gitsigns) |
-| `<leader>gv` / `<leader>gV` | Diffview open / close (uncommitted changes) |
-| `<leader>gm` | Diffview: this branch vs `main` (`main...HEAD`, falls back to master/origin) |
-| `<leader>gh` / `<leader>gH` | File history (current / all) |
+| `<leader>gv` | Hunk list: uncommitted changes, delta preview; `<Tab>` stages the hunk |
+| `<leader>gV` | Hunk list: this branch vs `main` (merge-base), delta preview |
+| `<leader>gh` / `<leader>gH` | File history (current / all) — diffview |
 | `]c` / `[c` | Next / previous hunk |
 | `ih` | Select hunk (text object) |
-| diffview window | `]c`/`[c` hunks · `<Tab>`/`<S-Tab>` files · `<leader>e` file list · `do` take other side · `q` close |
+| `:DiffviewOpen [main...HEAD]` | Side-by-side buffer diff (no key; `q` closes) |
 
-Git pickers (`gt`/`gc`/`gC`/`gz`) preview diffs through **delta** (`previewers.diff` in
-`snacks.lua`); same rendering as `git diff` in the shell and in lazygit.
+#### Review mode (gitsigns diff base + `lua/config/review.lua`)
+| Key | Action |
+|-----|--------|
+| `<leader>gn` | Review menu: pick a scope — open PR, branch vs main, a commit, since a commit |
+| `<leader>grl` | List the changed files of the chosen scope again (delta preview) |
+| `<leader>gN` | Exit review (back to original branch / file / cursor), or the menu if not in review |
+| `<leader>gm` | Gitsigns base = merge-base with main → every buffer shows PR hunks (`]c`/`[c`) |
+| `<leader>go` | Gitsigns base = pick any branch/commit |
+| `<leader>gM` | Gitsigns base = index (back to normal) |
+| `<leader>ga` | Gitsigns refresh (re-diff all buffers against the current base) |
+
+**delta** renders every text diff: `git diff`/`log`/`show` in the shell, lazygit's diff pane,
+the snacks git pickers (`gt`/`gc`/`gC`/`gz`/`gv`/`gV`) and the review file list
+(`previewers.diff.style = "terminal"` in `snacks.lua`). In-buffer views (gitsigns hunks,
+diffview) use Neovim's own diff highlighting instead.
 
 ### Build — C/C++ via CMake (`<leader>m`, `lua/config/cppbuild.lua`)
 | Key | Action |
@@ -195,10 +209,15 @@ Run from a terminal (the suite is slow + pnpm, so no in-editor plugin):
   choice to `~/.local/state/nvim/theme`, `<Esc>` reverts.
 - Plugin themes are listed in `lua/config/theme.lua` (`M.plugins`).
 - Custom themes live one-per-file in `lua/themes/`. A file returns
-  `{ name, desc, base?, background?, highlights = function() return { Group = spec } end }`.
-  `base` names a plugin colorscheme to paint over (Monochrome uses `monochrome.nvim`);
-  leave it out to start from Neovim's defaults. Drop a file in and it shows up in the picker.
-  `:ThemeReload` re-reads the current custom file after you edit it.
+  `{ name, desc, base?, setup?, background?, highlights = function() return { Group = spec } end }`.
+  `base` names a plugin colorscheme to paint over (Monochrome uses `monochrome.nvim`,
+  Gruvbox Distinct uses `gruvbox`); `setup` runs before it loads, for plugin options;
+  leave `base` out to start from Neovim's defaults. Drop a file in and it shows up in
+  the picker. `:ThemeReload` re-reads the current custom file after you edit it.
+- Monochrome's colours come from `lua/config/palette.lua` (one table, keyed by symbol
+  kind, shared by the treesitter groups and the C# Roslyn tokens). `<leader>up` tunes
+  one key at a time: hover a swatch to see it in the editor, `<CR>` writes it to the file,
+  or type a raw `#rrggbb` and `<CR>`. Add swatches in `lua/config/palette_tuner.lua`.
 
 ## Notes
 - `<leader>f` is bound to **format** *and* is the prefix for the find group — pressing

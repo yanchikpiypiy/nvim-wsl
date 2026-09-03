@@ -1,9 +1,9 @@
 -- Theme switcher.
 --   Plugin themes : declared in M.plugins below (a colorscheme name + optional setup).
 --   Custom themes : one file per theme in lua/themes/, auto-discovered. Each returns
---                   { name, desc, base?, background?, highlights = fn -> {group = spec} }.
---                   `base` is a plugin colorscheme to start from; omit it to paint on
---                   Neovim's defaults.
+--                   { name, desc, base?, setup?, background?, highlights = fn -> {group = spec} }.
+--                   `base` is a plugin colorscheme to start from (omit it to paint on
+--                   Neovim's defaults); `setup` runs before it loads (plugin options).
 --   <leader>ut  picker with live preview      :Theme <id>  switch directly
 local M = {}
 
@@ -24,9 +24,16 @@ M.plugins = {
     },
     {
         id = "everforest",
-        name = "Everforest",
+        name = "Everforest Medium",
         desc = "green, low contrast",
         setup = function() vim.g.everforest_background = "medium" end,
+        colorscheme = "everforest",
+    },
+    {
+        id = "everforest-soft",
+        name = "Everforest Soft",
+        desc = "lighter background",
+        setup = function() vim.g.everforest_background = "soft" end,
         colorscheme = "everforest",
     },
 }
@@ -81,6 +88,7 @@ end
 
 local function apply_custom(id, spec)
     vim.o.background = spec.background or "dark"
+    if spec.setup then spec.setup() end
     if spec.base then
         vim.cmd.colorscheme(spec.base)
     else

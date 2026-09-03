@@ -64,20 +64,51 @@ vim.diagnostic.config({
     },
 })
 
+-- Autosave on leaving insert mode, debounced per buffer. Each write fires a
+-- didSave, which makes Roslyn reanalyse the project and gitsigns re-diff the
+-- file, so dipping in and out of insert mode used to queue a full round of that
+-- every time. Coalescing to one write after a pause keeps the autosave without
+-- the churn.
+local AUTOSAVE_DEBOUNCE_MS = 1500
+local autosave_timers = {}
+
+local function cancel_autosave(bufnr)
+    local timer = autosave_timers[bufnr]
+    if timer then
+        timer:stop()
+        timer:close()
+        autosave_timers[bufnr] = nil
+    end
+end
+
 vim.api.nvim_create_autocmd("InsertLeave", {
-    callback = function()
-        local bufnr = vim.api.nvim_get_current_buf()
+    callback = function(args)
+        local bufnr = args.buf
         local bo = vim.bo[bufnr]
         -- skip special / readonly / non-modifiable / unnamed buffers (avoids E45)
         if bo.buftype ~= "" or bo.readonly or not bo.modifiable then return end
         if vim.api.nvim_buf_get_name(bufnr) == "" then return end
-        if bo.modified then
+
+        cancel_autosave(bufnr)
+        local timer = vim.uv.new_timer()
+        autosave_timers[bufnr] = timer
+        timer:start(AUTOSAVE_DEBOUNCE_MS, 0, vim.schedule_wrap(function()
+            cancel_autosave(bufnr)
+            if not vim.api.nvim_buf_is_valid(bufnr) or not vim.bo[bufnr].modified then return end
             -- Skip format-on-save for this auto-write (prettier on every
             -- InsertLeave is what made the frontend feel laggy). Explicit :w
             -- and <leader>f still format.
             vim.b[bufnr].skip_format_on_save = true
-            pcall(vim.cmd, "silent write")
+            -- The timer can fire after you have moved to another buffer, so the
+            -- write has to be aimed at the buffer that scheduled it.
+            vim.api.nvim_buf_call(bufnr, function()
+                pcall(vim.cmd, "silent write")
+            end)
             vim.b[bufnr].skip_format_on_save = false
-        end
+        end))
     end,
+})
+
+vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout" }, {
+    callback = function(args) cancel_autosave(args.buf) end,
 })
