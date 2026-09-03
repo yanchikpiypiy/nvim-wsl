@@ -27,6 +27,15 @@ return {
     priority = 1000,
     lazy = false, -- load early so ui.select (code actions) is owned from startup
     opts = {
+        -- Toast notifications in the corner. Without this, every vim.notify /
+        -- Snacks.notify (e.g. "Stash applied", checkout, hunk staged, buffer
+        -- reloaded) only flashes once in the command line and is easy to miss,
+        -- so git actions feel like nothing happened. This surfaces them all.
+        notifier = {
+            enabled = true,
+            timeout = 3000,
+            style = "compact",
+        },
         picker = {
             ui_select = true, -- route vim.ui.select (code actions) through the picker
             sources = {
@@ -70,6 +79,8 @@ return {
         -- Git pickers
         { "<leader>gf", function() Snacks.picker.git_files() end,    desc = "Git files (tracked)" },
         { "<leader>gt", function() Snacks.picker.git_status() end,   desc = "Git status (changed files)" },
+        -- Select a branch (Enter checks it out) or a commit here, then hit
+        -- <leader>grl to review its files (config/review.lua).
         { "<leader>gc", function() Snacks.picker.git_log() end,      desc = "Git commits (log)" },
         { "<leader>gC", function() Snacks.picker.git_log_file() end, desc = "Git commits (this file)" },
         { "<leader>gl", function() Snacks.picker.git_branches() end, desc = "Git branches" },

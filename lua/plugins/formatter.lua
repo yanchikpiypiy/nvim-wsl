@@ -6,7 +6,15 @@ return {
         {
             "<leader>f",
             function()
-                require("conform").format({ async = true, lsp_fallback = true })
+                -- Explicit format gives feedback; format_on_save stays silent
+                -- (a toast on every :w would be noise).
+                require("conform").format({ async = true, lsp_fallback = true }, function(err)
+                    if err then
+                        vim.notify("Format failed: " .. err, vim.log.levels.ERROR, { title = "conform" })
+                    else
+                        vim.notify("Formatted", vim.log.levels.INFO, { title = "conform" })
+                    end
+                end)
             end,
             mode = "",
             desc = "Format buffer",

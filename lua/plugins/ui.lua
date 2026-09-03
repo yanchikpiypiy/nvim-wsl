@@ -41,12 +41,7 @@ return {
         end,
     },
 
-    -- LSP progress indicator
-    {
-        "j-hui/fidget.nvim",
-        event = "LspAttach", -- only shows LSP progress; no need before an LSP attaches
-        config = function()
-            require("fidget").setup({})
-        end,
-    },
+    -- NOTE: fidget.nvim was removed — the snacks notifier now shows LSP progress
+    -- (see the LspProgress autocmd in lua/config/autocmds.lua), so a second
+    -- progress UI at the bottom-right was just duplicate messages.
 }
