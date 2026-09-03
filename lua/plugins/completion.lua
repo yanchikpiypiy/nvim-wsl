@@ -78,6 +78,10 @@ return {
                         module       = "blink-cmp-copilot",
                         score_offset = 100,
                         async        = true,
+                        -- Hard bound on top of async: the Copilot server does
+                        -- failing org-agent lookups and DNS misses in this
+                        -- setup, so cap how long it can hold a slot.
+                        timeout_ms   = 500,
                     },
                     snippets = {
                         score_offset = 50,

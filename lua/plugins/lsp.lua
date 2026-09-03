@@ -72,6 +72,14 @@ return {
                     "ts_ls",    -- JS / TS / React
                 },
                 automatic_installation = true,
+                -- CRITICAL: do NOT auto-enable every installed server. Otherwise
+                -- mason-lspconfig calls vim.lsp.enable() on ALL installed servers
+                -- (omnisharp, vtsls, eslint, fsautocomplete...), so C# files get
+                -- BOTH omnisharp AND roslyn attaching (double-indexing = PC lag),
+                -- and TS files get ts_ls + vtsls + eslint at once. We enable the
+                -- servers we actually want explicitly below (and roslyn.nvim owns
+                -- C#), so keep this off.
+                automatic_enable = false,
             })
         end,
     },
@@ -152,6 +160,11 @@ return {
             vim.lsp.config.clangd = {
                 cmd = {
                     "clangd",
+                    -- clangd writes its message trace to stderr, and Neovim
+                    -- logs all LSP stderr at ERROR level -- 20k lines and ~7MB
+                    -- of lsp.log per session, one synchronous write per RPC
+                    -- message. Errors only.
+                    "--log=error",
                     "--offset-encoding=utf-16",
                     "--background-index",          -- index whole project for cross-file gr/gd
                     "--clang-tidy",                -- live clang-tidy diagnostics
