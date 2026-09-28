@@ -127,23 +127,23 @@ to match, so `]c`/`[c` walk exactly that scope's hunks.
 | in panel: `p` | Full-file diff in a float, through delta (`q`/`<Esc>` closes) |
 | in panel: `v` | Toggle viewed ✓ and move to the next file |
 | in panel: `s` | Scope: branch vs main · uncommitted only · one commit · since a commit · any ref |
-| in panel: `w` | Review another tree: existing worktrees, unmerged local branches, open PRs (gh) |
+| in panel: `w` | Review another branch / PR: local + remote-only branches, open PRs (gh), your other worktrees |
 | in panel: `r` / `q` / `Q` / `?` | Refresh (re-resolve base) · hide · end review · key help |
 
 How it behaves:
 - **Local changes are always in.** Every scope diffs the *working tree* against its base, so
   uncommitted edits and untracked files are listed (`●` = not committed yet, `?` = untracked).
   Starting on `main` with nothing ahead defaults to "uncommitted only".
-- **Other branches / PRs never touch your tree.** `w` on a branch that isn't checked out
-  anywhere creates a worktree at `../<repo>.review/<branch>`; a PR goes to
-  `../<repo>.review/pr-<n>` via `gh pr checkout` (or reuses the worktree that already has
-  its branch). Files open from that worktree, so LSPs start a second root there — the first
-  clangd index of a fresh worktree is slow.
-- **One commit is isolated.** It checks out in a single reused detached worktree
-  (`../<repo>.review/_commit`) with base = its parent, so you see only that commit.
-- `Q` resets the gitsigns base, returns you to the file/cursor you started on and offers to
-  remove the worktrees the review created (git refuses ones with uncommitted work; buffers
-  and LSP clients in them are closed first).
+- **Other branches / PRs never block anything.** `w` builds a throwaway copy under
+  `../<repo>.review/` (a detached worktree at the branch's commit; PRs are fetched as
+  `pull/<n>/head`), so no branch is locked and no branch is created. Local branches,
+  remote-only branches (`origin/*`) and open PRs are all listed. Files open from that copy,
+  so LSPs start a second root there.
+- **One commit is isolated** in the same way (`../<repo>.review/_commit`, base = its parent).
+- **Copies are always cleaned up**: switching to another review, `Q`, and quitting nvim
+  force-remove them (their buffers and LSP clients are closed first), and starting a review
+  sweeps any left by a crash. Edits made inside a review copy are thrown away. Branches are
+  never deleted. `Q` also resets the gitsigns base and returns you to where you started.
 - "main" is the first of `origin/main`, `origin/master`, `main`, `master` (`gitutil.lua`),
   and the diff base is the merge-base with it — the same thing a PR shows. Fetch first if
   `origin/main` is stale. `<leader>gV` uses the same ref.

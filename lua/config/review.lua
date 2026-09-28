@@ -88,28 +88,85 @@ local function worktrees(cwd)
     end, list)
 end
 
--- <parent>/<repo>.review/<slug>, next to the main checkout.
-local function review_path(cwd, slug)
+-- <parent>/<repo>.review — every review worktree lives here and is disposable.
+local function review_root(cwd)
     local common = first(cwd, { "rev-parse", "--path-format=absolute", "--git-common-dir" })
     if not common then return nil end
     local main = vim.fs.dirname(common)
-    return vim.fs.joinpath(vim.fs.dirname(main), vim.fs.basename(main) .. ".review",
-        (slug:gsub("[^%w%._-]", "-")))
+    return vim.fs.joinpath(vim.fs.dirname(main), vim.fs.basename(main) .. ".review")
 end
 
-local function is_worktree(cwd, path)
-    local want = realpath(path)
-    for _, w in ipairs(worktrees(cwd)) do
-        if realpath(w.path) == want then return true end
+local function under(path, root)
+    return path ~= nil and root ~= nil and (path .. "/"):sub(1, #root + 1) == root .. "/"
+end
+
+-- Close buffers/LSPs living in `path`, then force-remove the worktree.
+local function drop_tree(cwd, path, cb)
+    local root = realpath(path)
+    local spare
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+        if under(realpath(vim.api.nvim_buf_get_name(b)), root) then
+            for _, w in ipairs(vim.fn.win_findbuf(b)) do
+                spare = spare or vim.api.nvim_create_buf(true, false)
+                pcall(vim.api.nvim_win_set_buf, w, spare)
+            end
+            pcall(vim.api.nvim_buf_delete, b, { force = true })
+        end
     end
-    return false
+    for _, c in ipairs(vim.lsp.get_clients()) do
+        if c.root_dir and under(realpath(c.root_dir), root) then c:stop(true) end
+    end
+    local cmd = gitcmd(cwd, { "worktree", "remove", "--force", path })
+    if cb then run(cmd, nil, cb) else vim.fn.system(cmd) end
 end
 
-local function add_worktree(cwd, path, args, cb)
-    vim.fn.mkdir(vim.fs.dirname(path), "p")
+-- Remove every review worktree except `keep` (list of paths); sync when `sync`.
+local function sweep(cwd, keep, sync)
+    local root = review_root(cwd)
+    if not root or vim.fn.isdirectory(root) == 0 then return end
+    local rroot, kept = realpath(root), {}
+    for _, k in ipairs(keep or {}) do kept[realpath(k)] = true end
+    local todo = {}
+    for _, w in ipairs(worktrees(cwd)) do
+        local rp = realpath(w.path)
+        if under(rp, rroot) and not kept[rp] then todo[#todo + 1] = w.path end
+    end
+    local function finish()
+        git(cwd, { "worktree", "prune" })
+        for name, kind in vim.fs.dir(root) do
+            local p = vim.fs.joinpath(root, name)
+            if kind == "directory" and not kept[realpath(p)] and not vim.tbl_contains(todo, p)
+                and (vim.fn.filereadable(p .. "/.git") == 1 or vim.fn.empty(vim.fn.readdir(p)) == 1) then
+                vim.fn.delete(p, "rf")
+            end
+        end
+        vim.uv.fs_rmdir(root)
+    end
+    if sync then
+        for _, p in ipairs(todo) do drop_tree(cwd, p) end
+        return finish()
+    end
+    local pending = #todo
+    if pending == 0 then return finish() end
+    for _, p in ipairs(todo) do
+        drop_tree(cwd, p, function()
+            pending = pending - 1
+            if pending == 0 then finish() end
+        end)
+    end
+end
+
+-- Fresh detached worktree at `rev` (never holds a branch), replacing any old copy.
+local function fresh_tree(cwd, slug, rev, cb)
+    local root = review_root(cwd)
+    if not root then return notify("Can't find the repo's git dir", vim.log.levels.ERROR) end
+    local path = vim.fs.joinpath(root, (slug:gsub("[^%w%._-]", "-")))
+    drop_tree(cwd, path)
+    if vim.fn.isdirectory(path) == 1 then vim.fn.delete(path, "rf") end
+    vim.fn.mkdir(root, "p")
     git(cwd, { "worktree", "prune" })
-    notify("Creating worktree " .. vim.fn.fnamemodify(path, ":~") .. " …")
-    git_async(cwd, vim.list_extend({ "worktree", "add" }, args), function(out, err)
+    notify("Creating review copy " .. vim.fn.fnamemodify(path, ":~") .. " …")
+    git_async(cwd, { "worktree", "add", "--detach", path, rev }, function(out, err)
         if not out then return notify("worktree add failed: " .. err, vim.log.levels.ERROR) end
         cb(path)
     end)
@@ -127,7 +184,7 @@ end
 
 -- ── session ─────────────────────────────────────────────────────────────────
 -- M.s = { origin, home (tree picked with w), tree (tree shown), scope, base,
---         label, files, commits, viewed, created, buf, win, main_win, help, map, gen }
+--         label, names, files, commits, viewed, buf, win, main_win, help, map, gen }
 M.s = nil
 
 function M.is_active() return M.s ~= nil end
@@ -158,12 +215,12 @@ local function resolve(tree, scope)
     return rev
 end
 
-local function make_label(tree, scope, main)
+local function make_label(tree, scope, main, name)
     local k = scope.kind
     if k == "commit" then
         return "commit " .. scope.ref:sub(1, 7) .. "  " .. (first(tree, { "log", "-1", "--format=%s", scope.ref }) or "")
     end
-    local b = ref_name(tree)
+    local b = name or ref_name(tree)
     if k == "local" then return b .. " · uncommitted" end
     if k == "branch" then return b .. " vs " .. main end
     if k == "since" then return b .. " since " .. scope.ref:sub(1, 7) end
@@ -355,12 +412,13 @@ local function apply(s, tree, scope)
     local base, err, main = resolve(tree, scope)
     if not base then return notify("Can't review: " .. err, vim.log.levels.WARN) end
     s.tree, s.scope, s.base = tree, scope, base
-    s.label = make_label(tree, scope, main)
+    s.label = make_label(tree, scope, main, s.names[tree])
     s.files, s.commits = nil, nil
     s.gen = (s.gen or 0) + 1
     render(s)
     lualine_refresh()
     set_base(base, function() refresh(s) end)
+    sweep(s.origin.tree, { s.home, s.tree })
 end
 
 -- ── windows ─────────────────────────────────────────────────────────────────
@@ -456,10 +514,11 @@ function M.set_scope(scope)
     if s then apply(s, s.home, scope) end
 end
 
-function M.set_home(path)
+function M.set_home(path, name)
     local s = M.s
     if not s then return end
     s.home = path
+    s.names[path] = name
     apply(s, path, { kind = "branch" })
     vim.cmd("checktime")
 end
@@ -469,21 +528,11 @@ function M.review_commit(sha)
     local s = M.s
     if not s then return end
     local full = first(s.home, { "rev-parse", sha })
-    local slot = review_path(s.home, "_commit")
-    if not (full and slot) then return notify("Can't resolve " .. sha, vim.log.levels.WARN) end
-    local function go()
-        s.created[slot] = true
-        apply(s, slot, { kind = "commit", ref = full })
+    if not full then return notify("Can't resolve " .. sha, vim.log.levels.WARN) end
+    fresh_tree(s.origin.tree, "_commit", full, function(p)
+        apply(s, p, { kind = "commit", ref = full })
         vim.cmd("checktime")
-    end
-    if is_worktree(s.home, slot) then
-        git_async(slot, { "checkout", "--detach", full }, function(out, err)
-            if not out then return notify("Commit worktree is dirty? " .. err, vim.log.levels.ERROR) end
-            go()
-        end)
-    else
-        add_worktree(s.home, slot, { "--detach", slot, full }, go)
-    end
+    end)
 end
 
 function M.scope_menu()
@@ -517,93 +566,100 @@ function M.scope_menu()
     }, function(c) if c then c[2]() end end)
 end
 
-local function open_tree_picker(s, items, by_branch)
+local function open_tree_picker(s, items)
     local cwd = s.origin.tree
     Snacks.picker.pick({
-        title = "Review which tree / branch / PR",
+        title = "Review a branch / PR",
         items = items,
         format = "text",
         confirm = function(picker, item)
             picker:close()
             if not item then return end
+            if item.kind == "here" then return M.set_home(cwd) end
             if item.kind == "tree" then return M.set_home(item.path) end
             if item.kind == "branch" then
-                local path = review_path(cwd, item.branch)
-                return add_worktree(cwd, path, { path, item.branch }, function(p)
-                    s.created[p] = true
-                    M.set_home(p)
-                end)
+                return fresh_tree(cwd, item.name, item.ref, function(p) M.set_home(p, item.name) end)
             end
-            -- PR: reuse the worktree that already has its branch, else a fresh one
-            local wt = item.head and by_branch[item.head]
-            if wt then
-                notify("PR #" .. item.pr .. " is already in " .. vim.fn.fnamemodify(wt.path, ":~") .. " — pull there to update")
-                return M.set_home(wt.path)
-            end
-            local path = review_path(cwd, "pr-" .. item.pr)
-            local function checkout(p)
-                s.created[p] = true
-                notify("gh pr checkout " .. item.pr .. " …")
-                run({ "gh", "pr", "checkout", tostring(item.pr) }, p, function(ok, _, err)
-                    if not ok then return notify("gh pr checkout failed: " .. err, vim.log.levels.ERROR) end
-                    M.set_home(p)
-                end)
-            end
-            if is_worktree(cwd, path) then checkout(path) else add_worktree(cwd, path, { "--detach", path }, checkout) end
+            notify("Fetching PR #" .. item.pr .. " …")
+            git_async(cwd, { "fetch", "--quiet", "origin", "pull/" .. item.pr .. "/head" }, function(out, err)
+                if not out then return notify("fetch PR #" .. item.pr .. " failed: " .. err, vim.log.levels.ERROR) end
+                local sha = first(cwd, { "rev-parse", "FETCH_HEAD" })
+                fresh_tree(cwd, "pr-" .. item.pr, sha, function(p) M.set_home(p, "PR #" .. item.pr) end)
+            end)
         end,
     })
 end
 
+-- This tree, your other worktrees, unmerged local + remote-only branches, open PRs.
 function M.tree_menu()
     local s = M.s
     if not s then return end
     local cwd = s.origin.tree
-    local items, by_branch = {}, {}
-    local wts = worktrees(cwd)
-    for _, w in ipairs(wts) do
-        if w.branch then by_branch[w.branch] = w end
-    end
-    for _, w in ipairs(wts) do
-        if vim.fs.basename(w.path) ~= "_commit" then
-            local tag = realpath(w.path) == realpath(cwd) and "this tree" or "worktree"
-            local cur = realpath(w.path) == realpath(s.home) and " ●" or ""
+    local rroot = realpath(review_root(cwd))
+    local here = ref_name(cwd)
+    local items = { { text = string.format("%-7s  %s  (your tree)", "here", here), kind = "here" } }
+    local busy = { [here] = true }
+    for _, w in ipairs(worktrees(cwd)) do
+        local rp = realpath(w.path)
+        if rp ~= realpath(cwd) and not under(rp, rroot) then
             items[#items + 1] = {
-                text = string.format("%-9s  %s  %s%s", tag, w.branch or "(detached)", vim.fn.fnamemodify(w.path, ":~"), cur),
+                text = string.format("%-7s  %s  %s", "tree", w.branch or "(detached)", vim.fn.fnamemodify(w.path, ":~")),
                 kind = "tree", path = w.path,
             }
+            if w.branch then busy[w.branch] = true end
         end
     end
     local main = gitutil.main_base(cwd, true)
     if main then
         local merged = {}
-        for _, b in ipairs(git(cwd, { "branch", "--merged", main, "--format=%(refname:short)" }) or {}) do
+        for _, b in ipairs(git(cwd, { "branch", "-a", "--merged", main, "--format=%(refname)" }) or {}) do
             merged[vim.trim(b)] = true
         end
+        local locals = {}
+        -- local branches: all unmerged, newest first, with commits ahead and last subject
+        for _, row in ipairs(git(cwd, { "for-each-ref", "--sort=-committerdate",
+            "--format=%(refname:short)%09%(ahead-behind:" .. main .. ")%09%(committerdate:relative)%09%(contents:subject)",
+            "refs/heads/" }) or {}) do
+            local name, ahead, when, subj = row:match("^([^\t]+)\t(%d+) %d+\t([^\t]*)\t(.*)$")
+            if name then
+                locals[name] = true
+                if not busy[name] and not merged["refs/heads/" .. name] then
+                    items[#items + 1] = {
+                        text = string.format("%-7s  %s  +%s · %s · %s", "branch", name, ahead, when, subj),
+                        kind = "branch", name = name, ref = "refs/heads/" .. name,
+                    }
+                end
+            end
+        end
+        -- remote-only branches (no local copy), capped
         local n = 0
         for _, row in ipairs(git(cwd, { "for-each-ref", "--sort=-committerdate",
-            "--format=%(refname:short)%09%(committerdate:relative)", "refs/heads/" }) or {}) do
-            local b, when = row:match("^([^\t]+)\t(.*)$")
-            if b and not merged[b] and not by_branch[b] then
-                items[#items + 1] = { text = string.format("%-9s  %s  (%s)", "branch", b, when), kind = "branch", branch = b }
+            "--format=%(refname:lstrip=3)%09%(committerdate:relative)%09%(contents:subject)", "refs/remotes/origin/" }) or {}) do
+            local name, when, subj = row:match("^([^\t]+)\t([^\t]*)\t(.*)$")
+            if name and name ~= "HEAD" and not locals[name] and not busy[name]
+                and not merged["refs/remotes/origin/" .. name] then
+                items[#items + 1] = {
+                    text = string.format("%-7s  %s  %s · %s", "remote", name, when, subj),
+                    kind = "branch", name = name, ref = "refs/remotes/origin/" .. name,
+                }
                 n = n + 1
-                if n >= 20 then break end
+                if n >= 30 then break end
             end
         end
     end
-    if vim.fn.executable("gh") == 0 then return open_tree_picker(s, items, by_branch) end
+    if vim.fn.executable("gh") == 0 then return open_tree_picker(s, items) end
     notify("Loading PRs …")
-    run({ "gh", "pr", "list", "--state", "open", "--limit", "100", "--json", "number,title,headRefName,author,isDraft" },
+    run({ "gh", "pr", "list", "--state", "open", "--limit", "100", "--json", "number,title,author,isDraft" },
         cwd, function(ok, out)
             local okj, prs = pcall(vim.json.decode, ok and out or "")
             for _, p in ipairs(okj and type(prs) == "table" and prs or {}) do
-                local where = by_branch[p.headRefName] and "  [worktree]" or ""
                 items[#items + 1] = {
-                    text = string.format("%-9s  #%d %s  (%s)%s%s", "PR", p.number, p.title,
-                        (p.author and p.author.login) or "?", p.isDraft and " [draft]" or "", where),
-                    kind = "pr", pr = p.number, head = p.headRefName,
+                    text = string.format("%-7s  #%d %s  (%s)%s", "PR", p.number, p.title,
+                        (p.author and p.author.login) or "?", p.isDraft and " [draft]" or ""),
+                    kind = "pr", pr = p.number,
                 }
             end
-            open_tree_picker(s, items, by_branch)
+            open_tree_picker(s, items)
         end)
 end
 
@@ -699,7 +755,7 @@ function M.start()
     local ok, cur = pcall(vim.api.nvim_win_get_cursor, win)
     local s = {
         origin = { win = win, file = vim.fn.filereadable(file) == 1 and file or nil, cursor = ok and cur or nil, tree = tree },
-        home = tree, viewed = {}, created = {},
+        home = tree, viewed = {}, names = {},
         main_win = is_normal_win(win) and win or nil,
     }
     M.s = s
@@ -715,38 +771,6 @@ function M.toggle()
     if not s then return M.start() end
     if vim.api.nvim_get_current_win() == panel_win(s) then return M.hide() end
     show(s, true)
-end
-
-local function cleanup_worktrees(s)
-    local paths = vim.tbl_filter(function(p) return vim.fn.isdirectory(p) == 1 end, vim.tbl_keys(s.created))
-    if #paths == 0 then return end
-    vim.ui.select({ "Keep", "Remove" }, {
-        prompt = "Remove " .. #paths .. " review worktree(s)? (refused if they have uncommitted work)",
-    }, function(choice)
-        if choice ~= "Remove" then return end
-        for _, p in ipairs(paths) do
-            local root = realpath(p) .. "/"
-            local busy = false
-            for _, b in ipairs(vim.api.nvim_list_bufs()) do
-                local name = realpath(vim.api.nvim_buf_get_name(b))
-                if name and name:sub(1, #root) == root then
-                    if vim.bo[b].modified then busy = true else pcall(vim.api.nvim_buf_delete, b, { force = true }) end
-                end
-            end
-            for _, c in ipairs(vim.lsp.get_clients()) do
-                local r = c.root_dir and realpath(c.root_dir)
-                if r and (r .. "/"):sub(1, #root) == root then c:stop() end
-            end
-            if busy then
-                notify("Kept " .. vim.fn.fnamemodify(p, ":~") .. " — it has unsaved buffers", vim.log.levels.WARN)
-            else
-                git_async(s.origin.tree, { "worktree", "remove", p }, function(out, err)
-                    if out then notify("Removed " .. vim.fn.fnamemodify(p, ":~"))
-                    else notify("Kept " .. vim.fn.fnamemodify(p, ":~") .. ": " .. err, vim.log.levels.WARN) end
-                end)
-            end
-        end
-    end)
 end
 
 function M.stop()
@@ -765,7 +789,7 @@ function M.stop()
     if s.buf and vim.api.nvim_buf_is_valid(s.buf) then pcall(vim.api.nvim_buf_delete, s.buf, { force = true }) end
     lualine_refresh()
     notify("Review off")
-    cleanup_worktrees(s)
+    sweep(o.tree, {})
 end
 
 -- ── autocmds + keys ─────────────────────────────────────────────────────────
@@ -777,6 +801,13 @@ vim.api.nvim_create_autocmd({ "BufWritePost", "FocusGained" }, {
         timer = timer or vim.uv.new_timer()
         timer:stop()
         timer:start(300, 0, vim.schedule_wrap(function() if M.s then refresh(M.s) end end))
+    end,
+})
+
+vim.api.nvim_create_autocmd("VimLeavePre", {
+    group = aug,
+    callback = function()
+        if M.s then sweep(M.s.origin.tree, {}, true) end
     end,
 })
 
