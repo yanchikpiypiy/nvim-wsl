@@ -167,6 +167,11 @@ return {
                     "--log=error",
                     "--offset-encoding=utf-16",
                     "--background-index",          -- index whole project for cross-file gr/gd
+                    "--background-index-priority=normal", -- default throttles indexing to idle
+                                                          -- priority, which crawls on big trees
+                    "--pch-storage=memory",        -- preambles are ~18MB each in Blender-sized
+                                                   -- headers; RAM beats round-tripping to disk
+                    "-j=12",                       -- indexer threads (of 16 cores), leaves headroom
                     "--clang-tidy",                -- live clang-tidy diagnostics
                     "--header-insertion=iwyu",     -- suggest correct headers (include-what-you-use)
                     "--completion-style=detailed", -- show full function signatures in completion

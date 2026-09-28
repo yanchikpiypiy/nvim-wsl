@@ -7,19 +7,34 @@
 --   <leader>ut  picker with live preview      :Theme <id>  switch directly
 local M = {}
 
+-- gruvbox.nvim links diffAdded/diffRemoved to the DiffAdd/DiffDelete line
+-- backgrounds, which puts a coloured block behind git status letters (diffview,
+-- pickers). Keep those fg-only.
+local function gruvbox_setup(contrast)
+    local g = require("gruvbox").palette
+    require("gruvbox").setup({
+        contrast = contrast,
+        overrides = {
+            diffAdded   = { fg = g.bright_green },
+            diffRemoved = { fg = g.bright_red },
+            diffChanged = { fg = g.bright_yellow },
+        },
+    })
+end
+
 M.plugins = {
     {
         id = "gruvbox-hard",
         name = "Gruvbox Dark Hard",
         desc = "default",
-        setup = function() require("gruvbox").setup({ contrast = "hard" }) end,
+        setup = function() gruvbox_setup("hard") end,
         colorscheme = "gruvbox",
     },
     {
         id = "gruvbox-medium",
         name = "Gruvbox Dark Medium",
         desc = "softer background",
-        setup = function() require("gruvbox").setup({ contrast = "" }) end,
+        setup = function() gruvbox_setup("") end,
         colorscheme = "gruvbox",
     },
     {

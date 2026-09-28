@@ -76,6 +76,8 @@ return {
                     copilot = {
                         name         = "copilot",
                         module       = "blink-cmp-copilot",
+                        -- <leader>uc flips this off; nil means on.
+                        enabled      = function() return vim.g.copilot_blink ~= false end,
                         score_offset = 100,
                         async        = true,
                         -- Hard bound on top of async: the Copilot server does

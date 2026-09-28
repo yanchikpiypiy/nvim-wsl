@@ -28,6 +28,12 @@ map("n", "<leader>lh", function()
     vim.notify(enabled and "Inlay hints off" or "Inlay hints on", vim.log.levels.INFO)
 end, vim.tbl_extend("force", opts, { desc = "Toggle inlay hints" }))
 
+-- Copilot completions toggle (blink source; copilot's inline suggestions are off)
+map("n", "<leader>uc", function()
+    vim.g.copilot_blink = vim.g.copilot_blink == false
+    vim.notify(vim.g.copilot_blink and "Copilot completions on" or "Copilot completions off", vim.log.levels.INFO)
+end, vim.tbl_extend("force", opts, { desc = "Toggle Copilot completions" }))
+
 -- Theme picker (live preview while hovering; Esc restores)
 map("n", "<leader>ut", function() require("config.theme").pick() end,
     vim.tbl_extend("force", opts, { desc = "Pick theme" }))

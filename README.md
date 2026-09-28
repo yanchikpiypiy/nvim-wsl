@@ -200,6 +200,7 @@ Run from a terminal (the suite is slow + pnpm, so no in-editor plugin):
 |-----|--------|
 | `<C-\>` | Toggle floating terminal |
 | insert: `<C-x>` `<C-e>` `<CR>` `<Tab>` `<S-Tab>` | completion: show · cancel · accept · next/snippet · prev |
+| `<leader>uc` | Toggle Copilot completions — flips `vim.g.copilot_blink`, which gates the `copilot` blink source in `lua/plugins/completion.lua`. Copilot has no inline ghost-text here (`suggestion = { enabled = false }` in `lua/plugins/copilot.lua`), so its suggestions only ever arrive inside the blink menu; turning the source off removes them completely while the LSP client stays attached, so flipping it back needs no reload. State is global and resets on restart. |
 
 ---
 
@@ -224,5 +225,26 @@ Run from a terminal (the suite is slow + pnpm, so no in-editor plugin):
   `<leader>f` alone formats after `timeoutlen`; `<leader>f{key}` opens a picker.
 - `]f`/`[f` = next/prev **function** globally, but **next/prev failing test** inside
   the C# test-runner window (buffer-local).
+- Indentation on blank lines: `autoindent` inserts the indent when you press Enter but
+  **removes it again** if you leave the line without typing (`:h 'autoindent'`), so blank
+  lines are genuinely empty and arrowing onto one puts you at column 0. `virtualedit` is
+  deliberately left unset — `"all"` was tried and made normal-mode motions worse. Use `S`
+  on a blank line to re-apply the indent, or `<C-t>` / `<C-d>` to indent/outdent by one
+  `shiftwidth` while inserting.
 - C# tests use easy-dotnet's runner (`<leader>nt*`). Frontend tests run outside
   nvim (`npx vitest --ui`) — the pnpm suite is too slow for an in-editor runner.
+- Comment continuation: filetype plugins add `o` and `r` to `formatoptions`, which is
+  why `o`/`O` on a comment line used to repeat the `//`. A `FileType` autocmd in
+  `lua/config/autocmds.lua` strips `o`, so `o`/`O` always opens a plain line. `r` is
+  kept on purpose — Enter inside a comment still continues it, which is what you want
+  when writing a multi-line block. To also drop that, add `:remove("r")` next to it.
+- C/C++ indent while typing (`CIndentPrefersTreesitter` in `lua/config/autocmds.lua`):
+  `cindent` lands you in the wrong column after a constructor-init list, a lambda
+  passed as a call argument, and a wrapped argument list. Treesitter's indenter gets
+  those right, so C/C++ buffers use it and fall back to `cindent` with `cinoptions=j1`
+  (the flag that fixes lambdas) when no parser is loaded or the file is over 256KB.
+  Still wrong in both: `<<` stream chains and wrapped template arguments — clang-format
+  fixes those on `:w`. Treesitter also puts the `: member_(x)` line itself at the
+  function's own indent rather than +4; the next Enter is correct.
+- Do NOT probe this config with scripted `nvim --headless` runs that enter insert mode.
+  See the comment in `lua/plugins/copilot.lua` — it cost two hard resets on 2026-09-08.

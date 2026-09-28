@@ -162,3 +162,34 @@ vim.api.nvim_create_autocmd("LspAttach", {
         end
     end,
 })
+
+-- `o`/`O` on a comment line should give a bare line, not another comment leader.
+-- (Enter inside a comment still continues it -- that's the `r` flag, left on.)
+vim.api.nvim_create_autocmd("FileType", {
+    group = vim.api.nvim_create_augroup("NoCommentOnOpenLine", { clear = true }),
+    callback = function()
+        vim.opt_local.formatoptions:remove("o")
+    end,
+})
+
+-- C/C++ indent-as-you-type. `cindent` puts you in the wrong column after a
+-- constructor-init list, a lambda passed as an argument, and a wrapped call
+-- arg list -- the three shapes cpp-gym is full of. Treesitter gets all three
+-- right (10/13 vs 8/13 against clang-format on those files), so prefer it and
+-- keep cindent+j1 as the fallback when no parser is loaded.
+-- Same 256KB ceiling as the treesitter highlight autocmd: above it there's no
+-- tree, so cindent stays in charge rather than parsing a huge generated file.
+vim.api.nvim_create_autocmd("FileType", {
+    group = vim.api.nvim_create_augroup("CIndentPrefersTreesitter", { clear = true }),
+    pattern = { "c", "cpp" },
+    callback = function(args)
+        vim.bo[args.buf].cinoptions = "j1"
+        local name = vim.api.nvim_buf_get_name(args.buf)
+        local stat = name ~= "" and vim.uv.fs_stat(name) or nil
+        if stat and stat.size > 256 * 1024 then return end
+        local lang = vim.treesitter.language.get_lang(vim.bo[args.buf].filetype)
+        if lang and pcall(vim.treesitter.get_parser, args.buf, lang) then
+            vim.bo[args.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
+        end
+    end,
+})
