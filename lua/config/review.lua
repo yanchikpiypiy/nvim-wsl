@@ -1,46 +1,39 @@
--- Local, single-pane PR/commit review — no octo required.
---
--- Pick a SCOPE (an open PR, the branch vs main, a commit, or "since a commit"),
--- get its changed files in a snacks picker, and open them as real buffers.
--- gitsigns' diff base is set to match the scope, so each file shows that
--- scope's changes as hunks you jump with ]c / [c and inspect with <leader>gp /
--- <leader>gP. One window, no diffview.
---
--- The selector = OPEN PRs (via gh) + LOCAL branches with unmerged work
--- (`--no-merged main`). So you get real PRs AND WIP branches that never opened a
--- PR, but not the pile of stale/merged branches.
---
--- Keys:
---   <leader>gn   Review MENU — pick a scope: PR/branch (vs main) / a commit /
---                since a commit / current branch / reset. Whatever you pick
---                becomes the active scope (and is remembered for grl).
---   <leader>grl  List the files for the chosen scope again and jump between
---                them (falls back to "where I am now" if nothing's chosen yet).
---   <leader>gN   In review -> go COMPLETELY back (original branch, file, cursor,
---                review off). Not in review -> same menu as <leader>gn.
---
--- A "REVIEW …" badge shows in the statusline while a session is active.
---
--- gitsigns' base is GLOBAL + STICKY: once set, every file diffs against it until
--- you exit. It does NOT turn off when you switch files. Exit with <leader>gN /
--- q / the menu's Reset / <leader>gM.
+-- Review panel: a left sidebar over what a scope changed (uncommitted and
+-- untracked files included). Other branches / PRs / single commits are opened
+-- in their own worktree, so your tree is never checked out from under you.
+-- Keys and behaviour: README.md → "Review mode".
+
+local gitutil = require("config.gitutil")
 
 local M = {}
+
+local EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+local WIDTH = 46
+local ns = vim.api.nvim_create_namespace("gitreview")
+local aug = vim.api.nvim_create_augroup("GitReview", { clear = true })
+
+local function define_hl()
+    for name, link in pairs({
+        GitReviewTitle = "Title", GitReviewHeader = "Label", GitReviewDim = "Comment",
+        GitReviewAdd = "Added", GitReviewDel = "Removed", GitReviewMod = "Changed",
+        GitReviewViewed = "DiagnosticOk", GitReviewLocal = "DiagnosticWarn", GitReviewKey = "Special",
+    }) do
+        vim.api.nvim_set_hl(0, name, { link = link, default = true })
+    end
+end
+define_hl()
+vim.api.nvim_create_autocmd("ColorScheme", { group = aug, callback = define_hl })
 
 local function notify(msg, level)
     vim.notify(msg, level or vim.log.levels.INFO, { title = "Review" })
 end
 
-local function root()
-    local name = vim.api.nvim_buf_get_name(0)
-    local dir = name ~= "" and vim.fs.dirname(name) or vim.fn.getcwd()
-    return vim.fs.root(dir, ".git") or vim.fn.getcwd()
+local function gitcmd(cwd, args)
+    return vim.list_extend({ "git", "-c", "core.quotePath=false", "-C", cwd }, args)
 end
 
 local function git(cwd, args)
-    local cmd = { "git", "-C", cwd }
-    vim.list_extend(cmd, args)
-    local out = vim.fn.systemlist(cmd)
+    local out = vim.fn.systemlist(gitcmd(cwd, args))
     if vim.v.shell_error ~= 0 then return nil end
     return out
 end
@@ -50,457 +43,754 @@ local function first(cwd, args)
     return out and out[1] or nil
 end
 
-local function base_ref(cwd)
-    for _, ref in ipairs({ "origin/main", "origin/master", "main", "master" }) do
-        if git(cwd, { "rev-parse", "--verify", "--quiet", ref }) then return ref end
+local function run(cmd, cwd, cb)
+    vim.system(cmd, { cwd = cwd, text = true }, function(r)
+        vim.schedule(function() cb(r.code == 0, r.stdout or "", r.stderr or "") end)
+    end)
+end
+
+local function git_async(cwd, args, cb)
+    run(gitcmd(cwd, args), nil, function(ok, out, err)
+        cb(ok and vim.split(out, "\n", { trimempty = true }) or nil, err)
+    end)
+end
+
+local function realpath(p)
+    return p and (vim.uv.fs_realpath(p) or vim.fs.normalize(p)) or nil
+end
+
+local function toplevel(path)
+    local dir = (path and path ~= "") and vim.fs.dirname(path) or vim.fn.getcwd()
+    if vim.fn.isdirectory(dir) == 0 then dir = vim.fn.getcwd() end
+    return first(dir, { "rev-parse", "--show-toplevel" })
+end
+
+local function ref_name(tree)
+    return first(tree, { "symbolic-ref", "--quiet", "--short", "HEAD" })
+        or first(tree, { "rev-parse", "--short", "HEAD" }) or "?"
+end
+
+-- ── worktrees ───────────────────────────────────────────────────────────────
+local function worktrees(cwd)
+    local list, cur = {}, nil
+    for _, l in ipairs(git(cwd, { "worktree", "list", "--porcelain" }) or {}) do
+        local path = l:match("^worktree (.+)$")
+        if path then
+            cur = { path = path }
+            list[#list + 1] = cur
+        elseif cur then
+            cur.branch = l:match("^branch refs/heads/(.+)$") or cur.branch
+            if l == "bare" then cur.bare = true end
+        end
     end
+    return vim.tbl_filter(function(w)
+        return not w.bare and vim.fn.isdirectory(w.path) == 1
+    end, list)
 end
 
--- Current branch name, or the raw commit sha if HEAD is detached.
-local function current_ref(cwd)
-    return first(cwd, { "symbolic-ref", "--quiet", "--short", "HEAD" })
-        or first(cwd, { "rev-parse", "HEAD" })
+-- <parent>/<repo>.review/<slug>, next to the main checkout.
+local function review_path(cwd, slug)
+    local common = first(cwd, { "rev-parse", "--path-format=absolute", "--git-common-dir" })
+    if not common then return nil end
+    local main = vim.fs.dirname(common)
+    return vim.fs.joinpath(vim.fs.dirname(main), vim.fs.basename(main) .. ".review",
+        (slug:gsub("[^%w%._-]", "-")))
 end
 
--- Snapshot of where we are, to return to on exit.
-local function capture(cwd)
-    local file = vim.api.nvim_buf_get_name(0)
-    local ok, cur = pcall(vim.api.nvim_win_get_cursor, 0)
-    return {
-        cwd = cwd,
-        branch = current_ref(cwd),
-        file = (file ~= "" and vim.fn.filereadable(file) == 1) and file or nil,
-        cursor = ok and cur or nil,
-    }
+local function is_worktree(cwd, path)
+    local want = realpath(path)
+    for _, w in ipairs(worktrees(cwd)) do
+        if realpath(w.path) == want then return true end
+    end
+    return false
 end
 
--- gitsigns' change_base is ASYNC. `cb` runs once the base is actually applied,
--- so callers can open files only AFTER it's in effect (otherwise a freshly
--- opened buffer can attach before the base lands and show no hunks).
+local function add_worktree(cwd, path, args, cb)
+    vim.fn.mkdir(vim.fs.dirname(path), "p")
+    git(cwd, { "worktree", "prune" })
+    notify("Creating worktree " .. vim.fn.fnamemodify(path, ":~") .. " …")
+    git_async(cwd, vim.list_extend({ "worktree", "add" }, args), function(out, err)
+        if not out then return notify("worktree add failed: " .. err, vim.log.levels.ERROR) end
+        cb(path)
+    end)
+end
+
+-- ── gitsigns base (bridge in plugins/gitsigns.lua) ──────────────────────────
 local function set_base(rev, cb)
-    local ok, gs = pcall(require, "gitsigns")
-    if ok then
-        gs.change_base(rev, true, function()
-            gs.refresh() -- re-diff already-open buffers vs the new base (not just freshly-opened ones)
-            -- Rescue new/renamed files that don't exist at the rev base (gitsigns
-            -- can't diff those, so they'd show ZERO hunks). Only meaningful when
-            -- setting a rev base; on reset (rev=nil) it's a harmless no-op.
-            -- Files opened later (e.g. from the picker) are caught by gitsigns'
-            -- BufReadPost/BufWinEnter autocmd, which runs the same rescue.
-            if rev and _G.__gitsigns_fixup_all then
-                vim.schedule(function() pcall(_G.__gitsigns_fixup_all) end)
-            end
-            if cb then vim.schedule(cb) end
-        end)
+    pcall(require, "gitsigns")
+    if _G.__gitsigns_apply_base then
+        _G.__gitsigns_apply_base(rev, cb and vim.schedule_wrap(cb))
     elseif cb then
         vim.schedule(cb)
     end
 end
 
+-- ── session ─────────────────────────────────────────────────────────────────
+-- M.s = { origin, home (tree picked with w), tree (tree shown), scope, base,
+--         label, files, commits, viewed, created, buf, win, main_win, help, map, gen }
+M.s = nil
 
--- ── review session state (for the badge, q exit, and full return) ──────────
-M._active = false
-M._label = nil
-M._session = nil
-M._origin = nil -- where we were when the CURRENT review began (branch/file/cursor)
-
--- The return point for `back`. Captured by the entry points (menu / grl) BEFORE
--- any picker opens, so branch + file + cursor are the user's real spot — not a
--- picker buffer. Reused for the whole session.
-local function mark_origin()
-    if not M._active then M._origin = capture(root()) end
-end
-
-local function origin_session()
-    return M._origin or capture(root())
-end
-
-function M.is_active() return M._active end
+function M.is_active() return M.s ~= nil end
 
 function M.status()
-    return M._active and ("REVIEW  " .. (M._label or "")) or ""
+    return M.s and ("REVIEW  " .. (M.s.label or "")) or ""
 end
 
-local function enter(session, label)
-    M._active = true
-    M._session = session
-    M._label = label
+local function lualine_refresh()
     pcall(function() require("lualine").refresh() end)
 end
 
-local function teardown()
-    M._active = false
-    M._label = nil
-    M._reopen = nil
-    M._origin = nil
-    pcall(function() require("lualine").refresh() end)
-end
-
--- ── the exit: reset base, restore branch + file + cursor ───────────────────
-function M.back()
-    set_base(nil)
-    local s = M._session
-    teardown()
-    M._session = nil
-    if not s then
-        notify("Diff base reset (no session to return to)")
-        return
+local function resolve(tree, scope)
+    local k = scope.kind
+    if k == "local" then return "HEAD" end
+    if k == "branch" then
+        local main = gitutil.main_base(tree, true)
+        if not main then return nil, "no main/master branch" end
+        local mb = first(tree, { "merge-base", "HEAD", main })
+        if not mb then return nil, "no merge-base with " .. main end
+        return mb, nil, main
     end
-    -- Switch back to the original branch if we're not already on it.
-    if s.branch and current_ref(s.cwd) ~= s.branch then
-        local co = vim.system({ "git", "checkout", s.branch }, { cwd = s.cwd, text = true }):wait()
-        if co.code ~= 0 then
-            notify("Base reset, but could not switch to " .. s.branch
-                .. " (uncommitted changes?): " .. (co.stderr or ""), vim.log.levels.ERROR)
-            return
+    if k == "commit" then
+        return first(tree, { "rev-parse", "--verify", "--quiet", scope.ref .. "^" }) or EMPTY_TREE
+    end
+    local rev = first(tree, { "rev-parse", "--verify", "--quiet", scope.ref .. "^{commit}" })
+    if not rev then return nil, "unknown ref " .. scope.ref end
+    return rev
+end
+
+local function make_label(tree, scope, main)
+    local k = scope.kind
+    if k == "commit" then
+        return "commit " .. scope.ref:sub(1, 7) .. "  " .. (first(tree, { "log", "-1", "--format=%s", scope.ref }) or "")
+    end
+    local b = ref_name(tree)
+    if k == "local" then return b .. " · uncommitted" end
+    if k == "branch" then return b .. " vs " .. main end
+    if k == "since" then return b .. " since " .. scope.ref:sub(1, 7) end
+    return b .. " vs " .. scope.ref
+end
+
+local function load(s, done)
+    local jobs = {
+        numstat = { "diff", "--numstat", "--no-renames", s.base },
+        status = { "diff", "--name-status", "--no-renames", s.base },
+        untracked = { "ls-files", "--others", "--exclude-standard" },
+        dirty = { "diff", "--name-only", "--no-renames", "HEAD" },
+    }
+    if s.scope.kind == "commit" then
+        jobs.log = { "log", "-1", "--format=%h%x09%s%x09%ar", "HEAD" }
+    elseif s.scope.kind ~= "local" then
+        jobs.log = { "log", "-200", "--format=%h%x09%s%x09%ar", s.base .. "..HEAD" }
+    end
+    local res, pending = {}, vim.tbl_count(jobs)
+    for key, args in pairs(jobs) do
+        git_async(s.tree, args, function(out)
+            res[key] = out or {}
+            pending = pending - 1
+            if pending == 0 then done(res) end
+        end)
+    end
+end
+
+local function build(res)
+    local files, by, dirty = {}, {}, {}
+    for _, p in ipairs(res.dirty) do dirty[p] = true end
+    for _, l in ipairs(res.status) do
+        local st, p = l:match("^(%a)%d*\t(.+)$")
+        if p then
+            by[p] = { path = p, status = st }
+            files[#files + 1] = by[p]
         end
-        vim.cmd("checktime")
     end
-    -- Reopen the file + cursor we were on when review started.
-    if s.file and vim.fn.filereadable(s.file) == 1 then
-        vim.cmd("edit " .. vim.fn.fnameescape(s.file))
-        if s.cursor then pcall(vim.api.nvim_win_set_cursor, 0, s.cursor) end
+    for _, l in ipairs(res.numstat) do
+        local a, d, p = l:match("^(%S+)\t(%S+)\t(.+)$")
+        if p and by[p] then by[p].add, by[p].del = tonumber(a), tonumber(d) end
     end
-    notify("Back on " .. (s.branch or "?") .. " — review off")
+    for _, p in ipairs(res.untracked) do
+        if not by[p] then
+            by[p] = { path = p, status = "?" }
+            files[#files + 1] = by[p]
+        end
+        dirty[p] = true
+    end
+    table.sort(files, function(a, b) return a.path < b.path end)
+    for i, f in ipairs(files) do
+        f.dirty, f.idx = dirty[f.path] or false, i
+    end
+    local commits = {}
+    for _, l in ipairs(res.log or {}) do
+        local sha, subj, when = l:match("^(%S+)\t([^\t]*)\t(.*)$")
+        if sha then commits[#commits + 1] = { sha = sha, subject = subj, when = when } end
+    end
+    return files, commits
 end
 
-M.reset = M.back -- menu "Reset" is just the full exit
+local function viewed_key(s, f) return s.tree .. "|" .. s.base .. "|" .. f.path end
 
--- ── a picker over a list of changed files ──────────────────────────────────
--- Returns a function that opens the list; used both by scoped reviews (below)
--- and by the ad-hoc "files vs current base" list in M.list.
--- `base_rev` (optional) is what each file is diffed against for the preview.
-local function file_picker(cwd, files, title, base_rev)
-    local items = {}
-    for _, f in ipairs(files) do
-        -- snacks resolves path as `cwd .. "/" .. file`, so keep `file` relative.
-        items[#items + 1] = { text = f, file = f, cwd = cwd }
+-- ── panel rendering ─────────────────────────────────────────────────────────
+local ST_HL = { A = "GitReviewAdd", ["?"] = "GitReviewAdd", D = "GitReviewDel" }
+
+local HELP = {
+    { "<CR> o", "open file · on a commit: review it" },
+    { "p", "diff preview (delta)" },
+    { "v", "mark viewed" },
+    { "]r [r", "next / prev file (from anywhere)" },
+    { "]c [c", "next / prev hunk (in the file)" },
+    { "s", "change scope" },
+    { "w", "review another branch / PR / worktree" },
+    { "r", "refresh (re-resolve base)" },
+    { "q", "hide panel (<leader>gn reopens)" },
+    { "Q", "end review" },
+}
+
+local function render(s)
+    if not (s.buf and vim.api.nvim_buf_is_valid(s.buf)) then return end
+    local lines, hls, map = {}, {}, {}
+    local function line(parts, item)
+        local text = ""
+        for _, p in ipairs(parts) do
+            if p[2] then hls[#hls + 1] = { #lines, #text, #text + #p[1], p[2] } end
+            text = text .. p[1]
+        end
+        lines[#lines + 1] = text
+        map[#lines] = item
     end
-    return function()
-        Snacks.picker.pick({
-            title = title,
-            items = items,
-            format = "file",
-            -- Preview = this file's diff against the review base (working tree vs
-            -- base, i.e. exactly the hunks gitsigns shows), rendered through delta
-            -- (previewers.diff.style = "terminal" in snacks.lua). Computed lazily.
-            preview = function(ctx)
-                if not ctx.item.diff then
-                    local args = { "git", "-C", cwd, "diff", "--no-color", "--no-ext-diff" }
-                    if base_rev then args[#args + 1] = base_rev end
-                    vim.list_extend(args, { "--", ctx.item.file })
-                    ctx.item.diff = vim.system(args, { text = true }):wait().stdout or ""
-                end
-                return require("snacks.picker.preview").diff(ctx)
-            end,
-            confirm = function(picker, item)
-                picker:close()
-                if item and item.file then
-                    local abs = item.cwd and vim.fs.joinpath(item.cwd, item.file) or item.file
-                    vim.cmd("edit " .. vim.fn.fnameescape(abs))
-                end
-            end,
-        })
+
+    local where = s.tree == s.origin.tree and "this tree" or vim.fn.fnamemodify(s.tree, ":~")
+    line({ { " REVIEW ", "GitReviewTitle" }, { s.label or "", "GitReviewHeader" } })
+    line({ { " " .. where .. "  ·  base " .. (s.base or "?"):sub(1, 7), "GitReviewDim" } })
+
+    if not s.files then
+        line({})
+        line({ { " loading…", "GitReviewDim" } })
+    else
+        local add, del, dirty, seen = 0, 0, 0, 0
+        for _, f in ipairs(s.files) do
+            add, del = add + (f.add or 0), del + (f.del or 0)
+            if f.dirty then dirty = dirty + 1 end
+            if s.viewed[viewed_key(s, f)] then seen = seen + 1 end
+        end
+        local sum = { { " " .. #s.files .. " files  " }, { "+" .. add, "GitReviewAdd" }, { " " }, { "-" .. del, "GitReviewDel" } }
+        if dirty > 0 then sum[#sum + 1] = { "  ● " .. dirty .. " uncommitted", "GitReviewLocal" } end
+        sum[#sum + 1] = { "  ✓ " .. seen .. "/" .. #s.files, "GitReviewViewed" }
+        line(sum)
+        line({})
+        line({ { " Files", "GitReviewTitle" } })
+        if #s.files == 0 then line({ { "   nothing changed", "GitReviewDim" } }) end
+        for _, f in ipairs(s.files) do
+            local seen_f = s.viewed[viewed_key(s, f)]
+            local parts = {
+                { seen_f and " ✓ " or "   ", "GitReviewViewed" },
+                { f.status .. " ", ST_HL[f.status] or "GitReviewMod" },
+                { vim.fs.basename(f.path), seen_f and "GitReviewDim" or nil },
+            }
+            local dir = vim.fs.dirname(f.path)
+            if dir ~= "." then parts[#parts + 1] = { " " .. dir, "GitReviewDim" } end
+            if f.status == "?" then
+                parts[#parts + 1] = { "  new", "GitReviewAdd" }
+            elseif f.add then
+                parts[#parts + 1] = { "  +" .. f.add, "GitReviewAdd" }
+                parts[#parts + 1] = { " -" .. f.del, "GitReviewDel" }
+            elseif f.status ~= "D" then
+                parts[#parts + 1] = { "  bin", "GitReviewDim" }
+            end
+            if f.dirty and s.scope.kind ~= "local" then parts[#parts + 1] = { " ●", "GitReviewLocal" } end
+            line(parts, { file = f })
+        end
+        if #s.commits > 0 then
+            line({})
+            line({ { " Commits (" .. #s.commits .. ")", "GitReviewTitle" } })
+            for _, c in ipairs(s.commits) do
+                line({ { "   " .. c.sha, "GitReviewKey" }, { "  " .. c.subject }, { "  " .. c.when, "GitReviewDim" } },
+                    { commit = c })
+            end
+        end
+    end
+
+    line({})
+    if s.help then
+        for _, h in ipairs(HELP) do
+            line({ { string.format(" %-7s", h[1]), "GitReviewKey" }, { h[2], "GitReviewDim" } })
+        end
+    else
+        line({ { " ?", "GitReviewKey" }, { " help  ", "GitReviewDim" }, { "s", "GitReviewKey" }, { " scope  ", "GitReviewDim" },
+            { "w", "GitReviewKey" }, { " tree  ", "GitReviewDim" }, { "Q", "GitReviewKey" }, { " end", "GitReviewDim" } })
+    end
+
+    -- keep the cursor on the same file across re-renders
+    local win = s.win and vim.api.nvim_win_is_valid(s.win) and s.win or nil
+    local keep = win and s.map and s.map[vim.api.nvim_win_get_cursor(win)[1]]
+    keep = keep and keep.file and keep.file.path
+
+    vim.bo[s.buf].modifiable = true
+    vim.api.nvim_buf_set_lines(s.buf, 0, -1, false, lines)
+    vim.bo[s.buf].modifiable = false
+    vim.api.nvim_buf_clear_namespace(s.buf, ns, 0, -1)
+    for _, h in ipairs(hls) do
+        vim.api.nvim_buf_set_extmark(s.buf, ns, h[1], h[2], { end_col = h[3], hl_group = h[4] })
+    end
+    s.map = map
+
+    if win and keep then
+        for lnum, it in pairs(map) do
+            if it.file and it.file.path == keep then
+                pcall(vim.api.nvim_win_set_cursor, win, { lnum, 0 })
+                break
+            end
+        end
     end
 end
 
--- ── open a scope's changed files ───────────────────────────────────────────
-local function open_review(cwd, files, title, base_rev, session, label)
-    if not files or #files == 0 then
-        notify("No changed files for: " .. title, vim.log.levels.WARN)
-        return
-    end
-    -- Remember how to re-open this exact list so <leader>grl can bring it back
-    -- for whatever scope you picked, without re-choosing.
-    M._reopen = file_picker(cwd, files, title, base_rev)
-    -- Apply the base FIRST, then mark active + open — so files show hunks.
-    set_base(base_rev, function()
-        enter(session, label)
-        M._reopen()
+local function refresh(s)
+    if M.s ~= s then return end
+    local gen = s.gen
+    load(s, function(res)
+        if M.s ~= s or s.gen ~= gen then return end
+        s.files, s.commits = build(res)
+        render(s)
     end)
 end
 
-local function do_pr(cwd, session)
-    local base = base_ref(cwd)
-    if not base then
-        notify("No main/master branch found to diff against", vim.log.levels.WARN)
-        return
-    end
-    local mb = first(cwd, { "merge-base", "HEAD", base })
-    if not mb then
-        notify("Could not compute merge-base with " .. base, vim.log.levels.WARN)
-        return
-    end
-    open_review(cwd, git(cwd, { "diff", "--name-only", mb, "HEAD" }),
-        "PR: files changed vs " .. base, mb, session, session.label or ("vs " .. base))
+local function apply(s, tree, scope)
+    local base, err, main = resolve(tree, scope)
+    if not base then return notify("Can't review: " .. err, vim.log.levels.WARN) end
+    s.tree, s.scope, s.base = tree, scope, base
+    s.label = make_label(tree, scope, main)
+    s.files, s.commits = nil, nil
+    s.gen = (s.gen or 0) + 1
+    render(s)
+    lualine_refresh()
+    set_base(base, function() refresh(s) end)
 end
 
-function M.pr(cwd)
-    cwd = cwd or root()
-    do_pr(cwd, origin_session())
+-- ── windows ─────────────────────────────────────────────────────────────────
+local function panel_win(s)
+    return s.win and vim.api.nvim_win_is_valid(s.win) and s.win or nil
 end
 
--- Review a single commit's own changes. base = C^, so exact only if C == HEAD
--- (otherwise you also see commits after C — we warn).
-function M.review_commit(cwd, sha, session)
-    cwd = cwd or root()
-    session = session or origin_session()
-    local head_full = first(cwd, { "rev-parse", "HEAD" })
-    local sha_full = first(cwd, { "rev-parse", sha })
-    if head_full and sha_full and head_full ~= sha_full then
-        notify("Commit " .. sha .. " is not HEAD — hunks show its changes PLUS "
-            .. "everything after it. Use 'Since' or checkout it for an isolated view.",
-            vim.log.levels.WARN)
-    end
-    local subj = first(cwd, { "log", "-1", "--format=%s", sha }) or ""
-    open_review(cwd, git(cwd, { "diff", "--name-only", sha .. "^", sha }),
-        "Commit " .. sha .. ": " .. subj, sha .. "^", session, "commit " .. sha)
+local function is_normal_win(w)
+    return vim.api.nvim_win_get_config(w).relative == ""
+        and vim.bo[vim.api.nvim_win_get_buf(w)].buftype == ""
 end
 
--- Review everything changed SINCE a commit (base = that commit, tip = HEAD).
-function M.review_since(cwd, sha, session)
-    cwd = cwd or root()
-    session = session or origin_session()
-    open_review(cwd, git(cwd, { "diff", "--name-only", sha, "HEAD" }),
-        "Changes since " .. sha, sha, session, "since " .. sha)
-end
-
--- Pick from THIS branch's own commits (what it added on top of main, i.e. the
--- PR's commits) — not the entire history. Falls back to full log only if the
--- branch has nothing ahead of main.
-local function pick_commit(cwd, title, on_pick)
-    local base = base_ref(cwd)
-    local range = base and (base .. "..HEAD") or "HEAD"
-    local lines = git(cwd, { "log", "--pretty=format:%h%x09%s%x09%an%x09%ad", "--date=short", range })
-    if not lines or #lines == 0 then
-        notify("No commits" .. (base and (" ahead of " .. base) or "") .. " on this branch",
-            vim.log.levels.WARN)
-        return
-    end
-    local items = {}
-    for _, l in ipairs(lines) do
-        local sha, subj, an, ad = l:match("^(%S+)\t([^\t]*)\t([^\t]*)\t(.*)$")
-        if sha then
-            items[#items + 1] = {
-                text = string.format("%s  %s  (%s, %s)", sha, subj, an, ad),
-                sha = sha,
-                cwd = cwd,
-            }
+local function main_win(s)
+    if s.main_win and vim.api.nvim_win_is_valid(s.main_win) and s.main_win ~= s.win then return s.main_win end
+    for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+        if w ~= s.win and is_normal_win(w) then
+            s.main_win = w
+            return w
         end
     end
+    s.main_win = vim.api.nvim_open_win(vim.api.nvim_create_buf(true, false), false, { split = "right", win = s.win })
+    if panel_win(s) then vim.api.nvim_win_set_width(s.win, WIDTH) end
+    return s.main_win
+end
+
+local function preview(s, f)
+    local cols, rows = math.floor(vim.o.columns * 0.85), math.floor(vim.o.lines * 0.8)
+    local cmd = f.status == "?"
+        and ("git diff --no-ext-diff --no-index -- /dev/null " .. vim.fn.shellescape(f.path))
+        or ("git diff --no-ext-diff " .. vim.fn.shellescape(s.base) .. " -- " .. vim.fn.shellescape(f.path))
+    cmd = cmd .. " | delta --paging=never --width=" .. (cols - 2)
+    local b = vim.api.nvim_create_buf(false, true)
+    local w = vim.api.nvim_open_win(b, true, {
+        relative = "editor", width = cols, height = rows, border = "rounded",
+        row = math.floor((vim.o.lines - rows) / 2), col = math.floor((vim.o.columns - cols) / 2),
+        title = " " .. f.path .. "  (q to close) ", title_pos = "center",
+    })
+    vim.fn.jobstart({ "sh", "-c", cmd }, { term = true, cwd = s.tree })
+    for _, k in ipairs({ "q", "<Esc>" }) do
+        vim.keymap.set("n", k, function() pcall(vim.api.nvim_win_close, w, true) end, { buffer = b, nowait = true })
+    end
+end
+
+local function open_file(s, f)
+    if f.status == "D" then return preview(s, f) end
+    vim.api.nvim_set_current_win(main_win(s))
+    vim.cmd("edit " .. vim.fn.fnameescape(vim.fs.joinpath(s.tree, f.path)))
+end
+
+local function focus_panel_on(s, f)
+    local w = panel_win(s)
+    if not (w and s.map) then return end
+    for lnum, it in pairs(s.map) do
+        if it.file == f then return pcall(vim.api.nvim_win_set_cursor, w, { lnum, 0 }) end
+    end
+end
+
+-- ── pickers ─────────────────────────────────────────────────────────────────
+local function pick_commit(tree, title, on_pick)
+    local main = gitutil.main_base(tree, true)
+    local mb = main and first(tree, { "merge-base", "HEAD", main })
+    local fmt = "--format=%h%x09%s%x09%an%x09%ar"
+    local lines = mb and git(tree, { "log", fmt, mb .. "..HEAD" }) or {}
+    if #lines == 0 then lines = git(tree, { "log", fmt, "-100" }) or {} end
+    local items = {}
+    for _, l in ipairs(lines) do
+        local sha, subj, an, ar = l:match("^(%S+)\t([^\t]*)\t([^\t]*)\t(.*)$")
+        if sha then
+            items[#items + 1] = { text = string.format("%s  %s  (%s, %s)", sha, subj, an, ar), sha = sha }
+        end
+    end
+    if #items == 0 then return notify("No commits", vim.log.levels.WARN) end
     Snacks.picker.pick({
         title = title,
         items = items,
         format = "text",
+        preview = function(ctx)
+            if not ctx.item.diff then
+                ctx.item.diff = vim.system(gitcmd(tree, { "show", "--no-color", "--no-ext-diff", ctx.item.sha }),
+                    { text = true }):wait().stdout or ""
+            end
+            return require("snacks.picker.preview").diff(ctx)
+        end,
         confirm = function(picker, item)
             picker:close()
-            if item and item.sha then on_pick(item.sha) end
+            if item then on_pick(item.sha) end
         end,
     })
 end
 
--- The one selector everything is filtered through: things worth reviewing =
--- OPEN PRs (via gh) + LOCAL branches with unmerged work. Picking one checks it
--- out and calls `on_pick(label)`; the ORIGIN (where back returns) was already
--- captured by the caller before this picker opened, so it isn't touched here.
-local function pick_target(cwd, title, on_pick)
-    local base = base_ref(cwd)
-    local items = {}
-    local seen = {} -- branch names already listed as a PR, to avoid duplicates
+function M.set_scope(scope)
+    local s = M.s
+    if s then apply(s, s.home, scope) end
+end
 
-    -- Open PRs (if gh is available).
-    if vim.fn.executable("gh") == 1 then
-        local res = vim.system({
-            "gh", "pr", "list", "--state", "open", "--limit", "100",
-            "--json", "number,title,headRefName,author,isDraft",
-        }, { cwd = cwd, text = true }):wait()
-        if res.code == 0 then
-            local ok, prs = pcall(vim.json.decode, res.stdout or "")
-            if ok and type(prs) == "table" then
-                for _, p in ipairs(prs) do
-                    local author = (p.author and p.author.login) or "?"
-                    local draft = p.isDraft and " [draft]" or ""
-                    items[#items + 1] = {
-                        text = string.format("PR #%d  %s  (%s)%s", p.number, p.title, author, draft),
-                        kind = "pr", pr = p.number, cwd = cwd,
-                    }
-                    if p.headRefName then seen[p.headRefName] = true end
-                end
-            end
-        end
+function M.set_home(path)
+    local s = M.s
+    if not s then return end
+    s.home = path
+    apply(s, path, { kind = "branch" })
+    vim.cmd("checktime")
+end
+
+-- One commit, isolated: a detached worktree slot (reused) checked out at it.
+function M.review_commit(sha)
+    local s = M.s
+    if not s then return end
+    local full = first(s.home, { "rev-parse", sha })
+    local slot = review_path(s.home, "_commit")
+    if not (full and slot) then return notify("Can't resolve " .. sha, vim.log.levels.WARN) end
+    local function go()
+        s.created[slot] = true
+        apply(s, slot, { kind = "commit", ref = full })
+        vim.cmd("checktime")
     end
-
-    -- Local branches worth reviewing: exclude ones already merged into main and
-    -- any already shown as a PR, sort by most-recent commit, and cap the list so
-    -- your active WIP branches surface at the top instead of a wall of old ones.
-    if base then
-        local merged = {}
-        for _, b in ipairs(git(cwd, { "branch", "--merged", base, "--format=%(refname:short)" }) or {}) do
-            merged[vim.trim(b)] = true
-        end
-        local rows = git(cwd, {
-            "for-each-ref", "--sort=-committerdate",
-            "--format=%(refname:short)%09%(committerdate:relative)", "refs/heads/",
-        }) or {}
-        local added, CAP = 0, 20
-        for _, row in ipairs(rows) do
-            local b, when = row:match("^([^\t]+)\t(.*)$")
-            b = b and vim.trim(b)
-            if b and b ~= "" and not seen[b] and not merged[b] then
-                items[#items + 1] = {
-                    text = string.format("local: %s  (%s)", b, when or ""),
-                    kind = "branch", branch = b, cwd = cwd,
-                }
-                added = added + 1
-                if added >= CAP then break end
-            end
-        end
+    if is_worktree(s.home, slot) then
+        git_async(slot, { "checkout", "--detach", full }, function(out, err)
+            if not out then return notify("Commit worktree is dirty? " .. err, vim.log.levels.ERROR) end
+            go()
+        end)
+    else
+        add_worktree(s.home, slot, { "--detach", slot, full }, go)
     end
+end
 
-    if #items == 0 then
-        notify("No open PRs or unmerged local branches to review", vim.log.levels.WARN)
-        return
-    end
+function M.scope_menu()
+    local s = M.s
+    if not s then return end
+    local choices = {
+        { "Branch vs main — committed + uncommitted", function() M.set_scope({ kind = "branch" }) end },
+        { "Uncommitted only — vs HEAD", function() M.set_scope({ kind = "local" }) end },
+        { "One commit — isolated, in the review worktree", function()
+            pick_commit(s.home, "Review one commit", M.review_commit)
+        end },
+        { "Since a commit — everything after it, plus uncommitted", function()
+            pick_commit(s.home, "Review changes since", function(sha) M.set_scope({ kind = "since", ref = sha }) end)
+        end },
+        { "Against any branch / ref", function()
+            Snacks.picker.git_branches({
+                all = true,
+                cwd = s.home,
+                title = "Review against…",
+                confirm = function(picker, item)
+                    picker:close()
+                    local ref = item and (item.branch or item.commit)
+                    if ref then M.set_scope({ kind = "ref", ref = vim.trim(ref) }) end
+                end,
+            })
+        end },
+    }
+    vim.ui.select(choices, {
+        prompt = "Review scope",
+        format_item = function(c) return c[1] end,
+    }, function(c) if c then c[2]() end end)
+end
 
+local function open_tree_picker(s, items, by_branch)
+    local cwd = s.origin.tree
     Snacks.picker.pick({
-        title = title,
+        title = "Review which tree / branch / PR",
         items = items,
         format = "text",
         confirm = function(picker, item)
             picker:close()
             if not item then return end
-            local label
-            if item.kind == "pr" then
-                notify("Checking out PR #" .. item.pr .. " …")
-                local co = vim.system({ "gh", "pr", "checkout", tostring(item.pr) },
-                    { cwd = cwd, text = true }):wait()
-                if co.code ~= 0 then
-                    notify("Checkout failed (uncommitted changes?): " .. (co.stderr or ""),
-                        vim.log.levels.ERROR)
-                    return
-                end
-                label = "PR #" .. item.pr
-            else
-                if current_ref(cwd) ~= item.branch then
-                    local co = vim.system({ "git", "checkout", item.branch },
-                        { cwd = cwd, text = true }):wait()
-                    if co.code ~= 0 then
-                        notify("Checkout failed (uncommitted changes?): " .. (co.stderr or ""),
-                            vim.log.levels.ERROR)
-                        return
-                    end
-                end
-                label = item.branch
+            if item.kind == "tree" then return M.set_home(item.path) end
+            if item.kind == "branch" then
+                local path = review_path(cwd, item.branch)
+                return add_worktree(cwd, path, { path, item.branch }, function(p)
+                    s.created[p] = true
+                    M.set_home(p)
+                end)
             end
-            vim.cmd("checktime")
-            on_pick(label)
+            -- PR: reuse the worktree that already has its branch, else a fresh one
+            local wt = item.head and by_branch[item.head]
+            if wt then
+                notify("PR #" .. item.pr .. " is already in " .. vim.fn.fnamemodify(wt.path, ":~") .. " — pull there to update")
+                return M.set_home(wt.path)
+            end
+            local path = review_path(cwd, "pr-" .. item.pr)
+            local function checkout(p)
+                s.created[p] = true
+                notify("gh pr checkout " .. item.pr .. " …")
+                run({ "gh", "pr", "checkout", tostring(item.pr) }, p, function(ok, _, err)
+                    if not ok then return notify("gh pr checkout failed: " .. err, vim.log.levels.ERROR) end
+                    M.set_home(p)
+                end)
+            end
+            if is_worktree(cwd, path) then checkout(path) else add_worktree(cwd, path, { "--detach", path }, checkout) end
         end,
     })
 end
 
--- Pick a PR/branch -> checkout -> review its whole diff vs main.
-function M.prs()
-    local cwd = root()
-    local session = origin_session() -- captured BEFORE any picker (true origin)
-    pick_target(cwd, "PRs + local branches — review vs main", function(label)
-        session.label = label
-        do_pr(cwd, session)
-    end)
-end
-
--- Pick a PR/branch -> checkout -> pick one of its commits -> review it.
-function M.commit()
-    local cwd = root()
-    local session = origin_session()
-    pick_target(cwd, "PRs + local branches — pick one, then a commit", function(label)
-        session.label = label
-        pick_commit(cwd, "Commits — pick one to review", function(sha)
-            M.review_commit(cwd, sha, session)
-        end)
-    end)
-end
-
--- Pick a PR/branch -> checkout -> pick a commit -> review everything since it.
-function M.since()
-    local cwd = root()
-    local session = origin_session()
-    pick_target(cwd, "PRs + local branches — pick one, then a commit (since)", function(label)
-        session.label = label
-        pick_commit(cwd, "Commits — review changes SINCE", function(sha)
-            M.review_since(cwd, sha, session)
-        end)
-    end)
-end
-
-function M.menu()
-    mark_origin() -- capture the real spot before any picker opens
-    local choices = {
-        { label = "PR/branch — review vs main",                       fn = M.prs },
-        { label = "Commit — pick a PR/branch, then one of its commits", fn = M.commit },
-        { label = "Since — pick a PR/branch, then a commit (changes since)", fn = M.since },
-        { label = "Current branch — files vs main (no picker)",       fn = function() M.pr() end },
-        { label = "Reset — exit review (base back to index)",         fn = M.back },
-    }
-    vim.ui.select(choices, {
-        prompt = "Local review:",
-        format_item = function(c) return c.label end,
-    }, function(choice)
-        if choice then choice.fn() end
-    end)
-end
-
--- <leader>gN: go back if reviewing, otherwise open the scope menu.
-function M.gN()
-    if M._active then M.back() else M.menu() end
-end
-
--- <leader>grl: bring back the file list for the current comparison.
--- Precedence:
---   1. A scope chosen from the <leader>gn menu → replay that exact list.
---   2. Otherwise, if <leader>go / <leader>gm pointed the gitsigns base at a
---      branch or commit → list the files that differ between THAT base and HEAD.
---      This is the "files this branch changed vs another branch" list, and it
---      rebuilds each press so it always tracks whatever go last set. (go = pick
---      what to compare against, grl = list the files — the two compose.)
---   3. Otherwise fall back to "where I am now": on a branch → its changes vs
---      main; detached at a commit → that commit's own files.
-function M.list()
-    if M._reopen then
-        M._reopen()
-        return
+function M.tree_menu()
+    local s = M.s
+    if not s then return end
+    local cwd = s.origin.tree
+    local items, by_branch = {}, {}
+    local wts = worktrees(cwd)
+    for _, w in ipairs(wts) do
+        if w.branch then by_branch[w.branch] = w end
     end
-    mark_origin() -- entering review directly via grl
-    local cwd = root()
-    local ok, cfg = pcall(require, "gitsigns.config")
-    local base = ok and cfg.config and cfg.config.base
-    if base and vim.trim(tostring(base)) ~= "" then
-        base = tostring(base)
-        local files = git(cwd, { "diff", "--name-only", base, "HEAD" })
-        if not files or #files == 0 then
-            notify("No files differ between HEAD and base (" .. base .. ")", vim.log.levels.WARN)
-            return
+    for _, w in ipairs(wts) do
+        if vim.fs.basename(w.path) ~= "_commit" then
+            local tag = realpath(w.path) == realpath(cwd) and "this tree" or "worktree"
+            local cur = realpath(w.path) == realpath(s.home) and " ●" or ""
+            items[#items + 1] = {
+                text = string.format("%-9s  %s  %s%s", tag, w.branch or "(detached)", vim.fn.fnamemodify(w.path, ":~"), cur),
+                kind = "tree", path = w.path,
+            }
         end
-        -- base is already applied by go/gm; just list. Ephemeral (not remembered),
-        -- so the next grl re-reads the current base instead of a stale list.
-        file_picker(cwd, files, "Files changed vs " .. base, base)()
-        return
     end
-    local branch = first(cwd, { "symbolic-ref", "--quiet", "--short", "HEAD" })
-    if branch then
-        M.pr(cwd) -- on a branch → its changes vs main
+    local main = gitutil.main_base(cwd, true)
+    if main then
+        local merged = {}
+        for _, b in ipairs(git(cwd, { "branch", "--merged", main, "--format=%(refname:short)" }) or {}) do
+            merged[vim.trim(b)] = true
+        end
+        local n = 0
+        for _, row in ipairs(git(cwd, { "for-each-ref", "--sort=-committerdate",
+            "--format=%(refname:short)%09%(committerdate:relative)", "refs/heads/" }) or {}) do
+            local b, when = row:match("^([^\t]+)\t(.*)$")
+            if b and not merged[b] and not by_branch[b] then
+                items[#items + 1] = { text = string.format("%-9s  %s  (%s)", "branch", b, when), kind = "branch", branch = b }
+                n = n + 1
+                if n >= 20 then break end
+            end
+        end
+    end
+    if vim.fn.executable("gh") == 0 then return open_tree_picker(s, items, by_branch) end
+    notify("Loading PRs …")
+    run({ "gh", "pr", "list", "--state", "open", "--limit", "100", "--json", "number,title,headRefName,author,isDraft" },
+        cwd, function(ok, out)
+            local okj, prs = pcall(vim.json.decode, ok and out or "")
+            for _, p in ipairs(okj and type(prs) == "table" and prs or {}) do
+                local where = by_branch[p.headRefName] and "  [worktree]" or ""
+                items[#items + 1] = {
+                    text = string.format("%-9s  #%d %s  (%s)%s%s", "PR", p.number, p.title,
+                        (p.author and p.author.login) or "?", p.isDraft and " [draft]" or "", where),
+                    kind = "pr", pr = p.number, head = p.headRefName,
+                }
+            end
+            open_tree_picker(s, items, by_branch)
+        end)
+end
+
+-- ── panel lifecycle ─────────────────────────────────────────────────────────
+local function item_at_cursor(s)
+    return s.map and s.map[vim.api.nvim_win_get_cursor(0)[1]]
+end
+
+function M.jump(dir)
+    local s = M.s
+    if not (s and s.files and #s.files > 0) then return notify("No review files (<leader>gn)", vim.log.levels.WARN) end
+    local idx
+    if vim.api.nvim_get_current_win() == panel_win(s) then
+        local it = item_at_cursor(s)
+        idx = it and it.file and it.file.idx
     else
-        local sha = first(cwd, { "rev-parse", "HEAD" })
-        if sha then
-            M.review_commit(cwd, sha) -- detached → this commit's files
-        else
-            notify("Could not resolve HEAD", vim.log.levels.WARN)
+        local cur = realpath(vim.api.nvim_buf_get_name(0))
+        for _, f in ipairs(s.files) do
+            if realpath(vim.fs.joinpath(s.tree, f.path)) == cur then idx = f.idx end
         end
     end
+    local n = #s.files
+    local f = s.files[idx and ((idx - 1 + dir) % n) + 1 or (dir > 0 and 1 or n)]
+    open_file(s, f)
+    focus_panel_on(s, f)
+    vim.api.nvim_echo({ { string.format("[%d/%d] %s", f.idx, n, f.path) } }, false, {})
 end
+
+function M.hide()
+    local w = M.s and panel_win(M.s)
+    if w and not pcall(vim.api.nvim_win_close, w, false) then
+        notify("Panel is the last window — Q ends the review", vim.log.levels.WARN)
+    end
+end
+
+local function set_keys(s, b)
+    local function k(lhs, fn, desc) vim.keymap.set("n", lhs, fn, { buffer = b, nowait = true, silent = true, desc = desc }) end
+    local function on_item(fn)
+        return function()
+            local it = item_at_cursor(s)
+            if it then fn(it) end
+        end
+    end
+    local open = on_item(function(it)
+        if it.file then open_file(s, it.file) elseif it.commit then M.review_commit(it.commit.sha) end
+    end)
+    k("<CR>", open, "Open")
+    k("o", open, "Open")
+    k("p", on_item(function(it) if it.file then preview(s, it.file) end end), "Diff preview")
+    k("v", on_item(function(it)
+        if not it.file then return end
+        local key = viewed_key(s, it.file)
+        s.viewed[key] = not s.viewed[key] or nil
+        render(s)
+        local nxt = s.files[it.file.idx + 1]
+        if nxt then focus_panel_on(s, nxt) end
+    end), "Toggle viewed")
+    k("s", M.scope_menu, "Scope")
+    k("w", M.tree_menu, "Tree / branch / PR")
+    k("r", function() apply(s, s.tree, s.scope) end, "Refresh")
+    k("q", M.hide, "Hide panel")
+    k("Q", M.stop, "End review")
+    k("?", function() s.help = not s.help; render(s) end, "Help")
+end
+
+local function show(s, focus)
+    if not (s.buf and vim.api.nvim_buf_is_valid(s.buf)) then
+        s.buf = vim.api.nvim_create_buf(false, true)
+        vim.bo[s.buf].filetype = "gitreview"
+        vim.bo[s.buf].modifiable = false
+        pcall(vim.api.nvim_buf_set_name, s.buf, "gitreview://panel")
+        set_keys(s, s.buf)
+    end
+    local w = panel_win(s)
+    if not w then
+        w = vim.api.nvim_open_win(s.buf, focus, { split = "left", win = -1, width = WIDTH })
+        local wo = vim.wo[w]
+        wo.number, wo.relativenumber, wo.signcolumn, wo.foldcolumn = false, false, "no", "0"
+        wo.statuscolumn, wo.wrap, wo.cursorline, wo.winfixwidth = "", false, true, true
+        wo.spell, wo.list = false, false
+        s.win = w
+    elseif focus then
+        vim.api.nvim_set_current_win(w)
+    end
+    render(s)
+end
+
+function M.start()
+    local file = vim.api.nvim_buf_get_name(0)
+    local tree = toplevel(file)
+    if not tree then return notify("Not in a git repo", vim.log.levels.WARN) end
+    local win = vim.api.nvim_get_current_win()
+    local ok, cur = pcall(vim.api.nvim_win_get_cursor, win)
+    local s = {
+        origin = { win = win, file = vim.fn.filereadable(file) == 1 and file or nil, cursor = ok and cur or nil, tree = tree },
+        home = tree, viewed = {}, created = {},
+        main_win = is_normal_win(win) and win or nil,
+    }
+    M.s = s
+    local main = gitutil.main_base(tree, true)
+    local mb = main and first(tree, { "merge-base", "HEAD", main })
+    local on_main = not mb or mb == first(tree, { "rev-parse", "HEAD" })
+    show(s, true)
+    apply(s, tree, { kind = on_main and "local" or "branch" })
+end
+
+function M.toggle()
+    local s = M.s
+    if not s then return M.start() end
+    if vim.api.nvim_get_current_win() == panel_win(s) then return M.hide() end
+    show(s, true)
+end
+
+local function cleanup_worktrees(s)
+    local paths = vim.tbl_filter(function(p) return vim.fn.isdirectory(p) == 1 end, vim.tbl_keys(s.created))
+    if #paths == 0 then return end
+    vim.ui.select({ "Keep", "Remove" }, {
+        prompt = "Remove " .. #paths .. " review worktree(s)? (refused if they have uncommitted work)",
+    }, function(choice)
+        if choice ~= "Remove" then return end
+        for _, p in ipairs(paths) do
+            local root = realpath(p) .. "/"
+            local busy = false
+            for _, b in ipairs(vim.api.nvim_list_bufs()) do
+                local name = realpath(vim.api.nvim_buf_get_name(b))
+                if name and name:sub(1, #root) == root then
+                    if vim.bo[b].modified then busy = true else pcall(vim.api.nvim_buf_delete, b, { force = true }) end
+                end
+            end
+            for _, c in ipairs(vim.lsp.get_clients()) do
+                local r = c.root_dir and realpath(c.root_dir)
+                if r and (r .. "/"):sub(1, #root) == root then c:stop() end
+            end
+            if busy then
+                notify("Kept " .. vim.fn.fnamemodify(p, ":~") .. " — it has unsaved buffers", vim.log.levels.WARN)
+            else
+                git_async(s.origin.tree, { "worktree", "remove", p }, function(out, err)
+                    if out then notify("Removed " .. vim.fn.fnamemodify(p, ":~"))
+                    else notify("Kept " .. vim.fn.fnamemodify(p, ":~") .. ": " .. err, vim.log.levels.WARN) end
+                end)
+            end
+        end
+    end)
+end
+
+function M.stop()
+    local s = M.s
+    if not s then return end
+    M.s = nil
+    set_base(nil)
+    local o = s.origin
+    local target = (o.win and vim.api.nvim_win_is_valid(o.win) and o.win ~= s.win) and o.win or main_win(s)
+    vim.api.nvim_set_current_win(target)
+    if o.file and vim.fn.filereadable(o.file) == 1 then
+        vim.cmd("edit " .. vim.fn.fnameescape(o.file))
+        if o.cursor then pcall(vim.api.nvim_win_set_cursor, 0, o.cursor) end
+    end
+    if panel_win(s) then pcall(vim.api.nvim_win_close, s.win, true) end
+    if s.buf and vim.api.nvim_buf_is_valid(s.buf) then pcall(vim.api.nvim_buf_delete, s.buf, { force = true }) end
+    lualine_refresh()
+    notify("Review off")
+    cleanup_worktrees(s)
+end
+
+-- ── autocmds + keys ─────────────────────────────────────────────────────────
+local timer
+vim.api.nvim_create_autocmd({ "BufWritePost", "FocusGained" }, {
+    group = aug,
+    callback = function()
+        if not M.s then return end
+        timer = timer or vim.uv.new_timer()
+        timer:stop()
+        timer:start(300, 0, vim.schedule_wrap(function() if M.s then refresh(M.s) end end))
+    end,
+})
+
+vim.api.nvim_create_autocmd("WinEnter", {
+    group = aug,
+    callback = function()
+        local s, w = M.s, vim.api.nvim_get_current_win()
+        if s and w ~= s.win and is_normal_win(w) then s.main_win = w end
+    end,
+})
 
 local map = vim.keymap.set
-map("n", "<leader>gn",  M.menu, { silent = true, desc = "Review: menu (pick scope)" })
-map("n", "<leader>gN",  M.gN,   { silent = true, desc = "Review: back / menu" })
-map("n", "<leader>grl", M.list, { silent = true, desc = "Review: list files (chosen scope)" })
+map("n", "<leader>gn", M.toggle, { silent = true, desc = "Review panel (open / focus / hide)" })
+map("n", "]r", function() M.jump(1) end, { silent = true, desc = "Next review file" })
+map("n", "[r", function() M.jump(-1) end, { silent = true, desc = "Prev review file" })
 
 return M

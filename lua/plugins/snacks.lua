@@ -80,8 +80,7 @@ return {
         -- Git pickers
         { "<leader>gf", function() Snacks.picker.git_files() end,    desc = "Git files (tracked)" },
         { "<leader>gt", function() Snacks.picker.git_status() end,   desc = "Git status (changed files)" },
-        -- Select a branch (Enter checks it out) or a commit here, then hit
-        -- <leader>grl to review its files (config/review.lua).
+        -- To review a branch/commit without checking it out: <leader>gn, then w / s.
         { "<leader>gc", function() Snacks.picker.git_log() end,      desc = "Git commits (log)" },
         { "<leader>gC", function() Snacks.picker.git_log_file() end, desc = "Git commits (this file)" },
         { "<leader>gl", function() Snacks.picker.git_branches() end, desc = "Git branches" },
@@ -89,7 +88,7 @@ return {
         -- Hunk lists rendered through delta (j/k = next/prev hunk, preview on the right).
         -- gv: uncommitted hunks (Tab stages the hunk under the cursor).
         -- gV: hunks this branch changed vs main (merge-base, like main...HEAD).
-        -- In-buffer review of the same (gitsigns base = main, ]c/[c) is <leader>gm / <leader>gn.
+        -- In-buffer review of the same (panel + gitsigns base, ]r/]c) is <leader>gn.
         -- Side-by-side buffer diffs are :DiffviewOpen / :DiffviewOpen main...HEAD.
         { "<leader>gv", function() Snacks.picker.git_diff() end, desc = "Hunks: uncommitted" },
         {

@@ -114,19 +114,45 @@ nvim-dap + dap-ui.
 | `ih` | Select hunk (text object) |
 | `:DiffviewOpen [main...HEAD]` | Side-by-side buffer diff (no key; `q` closes) |
 
-#### Review mode (gitsigns diff base + `lua/config/review.lua`)
+#### Review mode (`lua/config/review.lua`)
+A left sidebar listing what a scope changed; opening a file sets the gitsigns diff base
+to match, so `]c`/`[c` walk exactly that scope's hunks.
+
 | Key | Action |
 |-----|--------|
-| `<leader>gn` | Review menu: pick a scope — open PR, branch vs main, a commit, since a commit |
-| `<leader>grl` | List the changed files of the chosen scope again (delta preview) |
-| `<leader>gN` | Exit review (back to original branch / file / cursor), or the menu if not in review |
-| `<leader>gm` | Gitsigns base = merge-base with main → every buffer shows PR hunks (`]c`/`[c`) |
-| `<leader>go` | Gitsigns base = pick any branch/commit |
-| `<leader>gM` | Gitsigns base = index (back to normal) |
+| `<leader>gn` | Start a review / focus the panel / hide it (when already in it) |
+| `]r` / `[r` | Next / previous review file, from anywhere (echoes `[3/7] path`) |
 | `<leader>ga` | Gitsigns refresh (re-diff all buffers against the current base) |
+| in panel: `<CR>` / `o` | Open file in the main window · on a commit line: review that commit |
+| in panel: `p` | Full-file diff in a float, through delta (`q`/`<Esc>` closes) |
+| in panel: `v` | Toggle viewed ✓ and move to the next file |
+| in panel: `s` | Scope: branch vs main · uncommitted only · one commit · since a commit · any ref |
+| in panel: `w` | Review another tree: existing worktrees, unmerged local branches, open PRs (gh) |
+| in panel: `r` / `q` / `Q` / `?` | Refresh (re-resolve base) · hide · end review · key help |
+
+How it behaves:
+- **Local changes are always in.** Every scope diffs the *working tree* against its base, so
+  uncommitted edits and untracked files are listed (`●` = not committed yet, `?` = untracked).
+  Starting on `main` with nothing ahead defaults to "uncommitted only".
+- **Other branches / PRs never touch your tree.** `w` on a branch that isn't checked out
+  anywhere creates a worktree at `../<repo>.review/<branch>`; a PR goes to
+  `../<repo>.review/pr-<n>` via `gh pr checkout` (or reuses the worktree that already has
+  its branch). Files open from that worktree, so LSPs start a second root there — the first
+  clangd index of a fresh worktree is slow.
+- **One commit is isolated.** It checks out in a single reused detached worktree
+  (`../<repo>.review/_commit`) with base = its parent, so you see only that commit.
+- `Q` resets the gitsigns base, returns you to the file/cursor you started on and offers to
+  remove the worktrees the review created (git refuses ones with uncommitted work; buffers
+  and LSP clients in them are closed first).
+- "main" is the first of `origin/main`, `origin/master`, `main`, `master` (`gitutil.lua`),
+  and the diff base is the merge-base with it — the same thing a PR shows. Fetch first if
+  `origin/main` is stale. `<leader>gV` uses the same ref.
+- The panel refreshes on save and on focus (e.g. after committing in lazygit); `r` also
+  re-resolves the base (after a rebase).
+- Viewed marks last for the nvim session only.
 
 **delta** renders every text diff: `git diff`/`log`/`show` in the shell, lazygit's diff pane,
-the snacks git pickers (`gt`/`gc`/`gC`/`gz`/`gv`/`gV`) and the review file list
+the snacks git pickers (`gt`/`gc`/`gC`/`gz`/`gv`/`gV`) and the review panel's `p` preview
 (`previewers.diff.style = "terminal"` in `snacks.lua`). In-buffer views (gitsigns hunks,
 diffview) use Neovim's own diff highlighting instead.
 

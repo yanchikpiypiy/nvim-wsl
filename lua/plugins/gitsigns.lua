@@ -2,28 +2,6 @@ return {
     "lewis6991/gitsigns.nvim",
     event = { "BufReadPre", "BufNewFile" },
     config = function()
-        -- Resolve the base to diff a PR/feature branch against. Returns the
-        -- MERGE-BASE of HEAD and the first existing main/master ref, so gitsigns
-        -- shows only what THIS branch added — not commits main gained after you
-        -- branched off. Second return value is the human-readable ref name.
-        local function pr_base(bufnr)
-            bufnr = bufnr or vim.api.nvim_get_current_buf()
-            local file = vim.api.nvim_buf_get_name(bufnr)
-            local dir  = file ~= "" and vim.fn.fnamemodify(file, ":h") or vim.fn.getcwd()
-            local function git(...)
-                local out = vim.fn.systemlist({ "git", "-C", dir, ... })
-                if vim.v.shell_error ~= 0 then return nil end
-                return out
-            end
-            local base
-            for _, ref in ipairs({ "origin/main", "origin/master", "main", "master" }) do
-                if git("rev-parse", "--verify", "--quiet", ref) then base = ref; break end
-            end
-            if not base then return nil end
-            local mb = git("merge-base", "HEAD", base)
-            return (mb and mb[1]) or base, base
-        end
-
         local gs = require("gitsigns")
         gs.setup({
             -- Windows line-ending fix. Buffers here load as `fileformat=dos`
@@ -194,7 +172,7 @@ return {
         -- the OLD base, so they show stale or ZERO hunks while freshly-opened
         -- files look correct. refresh() re-diffs them all. (This was the "some
         -- files have hunks against the other branch, some don't" bug.)
-        local function apply_base(rev, msg, level)
+        local function apply_base(rev, msg, level, cb)
             gs.change_base(rev, true, function()
                 -- Reset (rev=nil, base=index): drop any buffer-local empty-tree
                 -- overrides we pinned, so those files follow the global base again
@@ -209,10 +187,12 @@ return {
                 gs.refresh()
                 fixup_all() -- rescue new-in-branch files that can't diff vs a rev base
                 if msg then vim.notify(msg, level or vim.log.levels.INFO) end
+                if cb then cb() end
             end)
         end
+        _G.__gitsigns_apply_base = function(rev, cb) apply_base(rev, nil, nil, cb) end
 
-        -- Files opened AFTER a rev base is set (e.g. picked from <leader>grl)
+        -- Files opened AFTER a rev base is set (e.g. opened from the review panel)
         -- attach one at a time — rescue each as it lands.
         vim.api.nvim_create_autocmd({ "BufReadPost", "BufWinEnter" }, {
             group = vim.api.nvim_create_augroup("GitsignsAddedFixup", { clear = true }),
@@ -250,44 +230,5 @@ return {
             local base = require("gitsigns.config").config.base
             vim.notify("Gitsigns refreshed (base: " .. tostring(base or "index") .. ")", vim.log.levels.INFO)
         end, { silent = true, desc = "Gitsigns refresh (re-diff all buffers)" })
-
-        -- Diff BASE control (global = applies to every buffer, current + future):
-        --   <leader>gm  base = merge-base with origin/main  (PR review)
-        --   <leader>go  base = pick ANY branch/commit (manual target)
-        --   <leader>gM  base = index                        (back to normal)
-        map("n", "<leader>gm", function()
-            local rev, ref = pr_base(0)
-            if not rev then
-                vim.notify("No main/master branch found to diff against", vim.log.levels.WARN)
-                return
-            end
-            apply_base(rev, "Gitsigns base → " .. ref .. " (merge-base). Jump hunks with ]c / [c")
-        end, { silent = true, desc = "Diff base = main (PR review)" })
-
-        map("n", "<leader>go", function()
-            local function set(ref)
-                if not ref or vim.trim(ref) == "" then return end
-                ref = vim.trim(ref)
-                apply_base(ref, "Gitsigns base → " .. ref)
-            end
-            if _G.Snacks and _G.Snacks.picker then
-                Snacks.picker.git_branches({
-                    all = true, -- include remote branches (origin/*), not just local
-                    title = "Gitsigns base — pick a branch/commit",
-                    confirm = function(picker, item)
-                        picker:close()
-                        -- item.branch for local/remote branches, item.commit when
-                        -- the row is a detached/HEAD entry with no branch name.
-                        if item then set(item.branch or item.commit) end
-                    end,
-                })
-            else
-                vim.ui.input({ prompt = "Gitsigns diff base (branch/commit): " }, set)
-            end
-        end, { silent = true, desc = "Diff base = pick branch/commit" })
-
-        map("n", "<leader>gM", function()
-            apply_base(nil, "Gitsigns base → index (default)")
-        end, { silent = true, desc = "Diff base = index (reset)" })
     end,
 }

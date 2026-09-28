@@ -1,15 +1,17 @@
--- Small git helpers shared by the git keymaps (snacks pickers, diffview).
+-- Small git helpers shared by the git keymaps (snacks pickers, diffview, review).
 local M = {}
 
--- First of main / master / origin/main / origin/master that exists in this
--- repo, or nil. Used as the base for "what did this branch change" views.
-function M.main_base()
-    for _, base in ipairs({ "main", "master", "origin/main", "origin/master" }) do
-        if vim.fn.system({ "git", "rev-parse", "--verify", "-q", base }) ~= "" then
+-- First of origin/main / origin/master / main / master that exists, or nil.
+-- Remote first so "what did this branch change" matches what a PR would show.
+function M.main_base(cwd, quiet)
+    for _, base in ipairs({ "origin/main", "origin/master", "main", "master" }) do
+        local cmd = cwd and { "git", "-C", cwd, "rev-parse", "--verify", "-q", base }
+            or { "git", "rev-parse", "--verify", "-q", base }
+        if vim.fn.system(cmd) ~= "" and vim.v.shell_error == 0 then
             return base
         end
     end
-    vim.notify("No main/master branch found", vim.log.levels.WARN)
+    if not quiet then vim.notify("No main/master branch found", vim.log.levels.WARN) end
 end
 
 return M
