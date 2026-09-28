@@ -1,112 +1,115 @@
 # Neovim Config — Prerequisites
 
-Everything that must be installed before this config works correctly.
+Everything that must exist on the machine before this config works. Plugins install
+themselves; the things below do not.
 
 ---
 
 ## Neovim
 
-**Version**: 0.10+ required (uses `vim.lsp.inlay_hint`, `vim.lsp.enable`, etc.)
+**0.11+ required.** The config uses `vim.lsp.config`, `vim.lsp.enable` and
+`vim.hl.priorities`, none of which exist in 0.10. Developed against `v0.13.0-dev`.
+
+> Despite the repo name, this is a **native Windows** config, not WSL. `lua/plugins/csharp.lua`
+> launches the Roslyn dll directly because libuv cannot exec a `.cmd` shim on Windows.
 
 ---
 
 ## System tools
 
-### Git
-Required by lazy.nvim (plugin manager) to clone and update plugins.
+| Tool | Needed for | Install (Windows) |
+|---|---|---|
+| **git** | lazy.nvim clones every plugin | `winget install Git.Git` |
+| **ripgrep** | snacks.picker live grep (`<leader>fg`) | `scoop install ripgrep` |
+| **fd** | snacks.picker file finder (`<leader>ff`) | `scoop install fd` |
+| **delta** | every diff preview — git pickers, review panel, lazygit | `scoop install delta` |
+| **lazygit** | `<leader>gg` | `scoop install lazygit` |
+| **gh** (GitHub CLI) | review mode: `w` → open PRs, `gh pr checkout` worktrees | `winget install GitHub.cli` |
+| **tree-sitter CLI** | compiles parsers (nvim-treesitter `main` branch) | `npm i -g tree-sitter-cli` |
+| **C compiler** | building those parsers | MSVC, or MSYS2/mingw |
+| **Nerd Font** | every icon in the statusline, picker, explorer, git signs | [nerdfonts.com](https://www.nerdfonts.com/) |
 
-### make / GCC (or any C compiler)
-Required to build `telescope-fzf-native.nvim` (`build = "make"`).
-On Windows: install via [MSYS2](https://www.msys2.org/) or use WSL.
-
-### fd
-Used by Telescope's `find_files` picker as the find backend.
-- Windows: `scoop install fd` or `winget install sharkdp.fd`
-- Linux/WSL: `apt install fd-find` or `cargo install fd-find`
-
-### ripgrep (rg)
-Used by Telescope's `live_grep` picker.
-- Windows: `scoop install ripgrep` or `winget install BurntSushi.ripgrep.MSVC`
-- Linux/WSL: `apt install ripgrep`
-
-### Node.js + npm
-Required by Mason to install several language servers (ts_ls, lua_ls, etc.).
-Get it from [nodejs.org](https://nodejs.org/) or via `nvm`.
-
-### .NET SDK
-Required by the Roslyn language server (C# LSP).
-Install from [dot.net](https://dot.net). The `roslyn` Mason package wraps the
-compiler toolchain — without .NET SDK installed it will not start.
-
-### LazyGit
-Required by `lazygit.nvim` (`<leader>gg`).
-- Windows: `scoop install lazygit` or `winget install JesseDuffield.lazygit`
-- Linux/WSL: see [lazygit releases](https://github.com/jesseduffield/lazygit/releases)
+**Node.js** is only needed for `ts_ls` and Copilot. A C#-only user can skip it.
 
 ---
 
-## Mason-installed language servers
+## Per language
 
-Mason auto-installs these on first launch (via `ensure_installed`), but they
-need the system dependencies above to work.
+### C# / .NET
+- **.NET SDK** — required by both the Roslyn language server and easy-dotnet. [dot.net](https://dot.net)
+- **Mason `roslyn`** — see the manual step below.
+- **Mason `netcoredbg`** — the debug adapter. easy-dotnet auto-registers it
+  (`debugger.auto_register_dap`), but the package still has to be installed.
 
-| Server | Language | Mason package | Needs |
-|---|---|---|---|
-| `roslyn` | C# | `roslyn` (Crashdummyy registry) | .NET SDK |
-| `lua_ls` | Lua | `lua-language-server` | — |
-| `clangd` | C / C++ | `clangd` | — |
-| `ts_ls` | JS / TS / React | `typescript-language-server` | Node.js |
+### C / C++
+- **CMake** — `<leader>mb` builds through it (`lua/config/cppbuild.lua`); a build dir must
+  already be configured (`CMakeCache.txt` present).
+- **clang-format** — ships with LLVM/clangd; used by conform on save.
+- For project-wide `gr`/`gd`, clangd needs `compile_commands.json`:
+  `cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -B build`
 
-> **Note**: Roslyn requires the custom Mason registry `Crashdummyy/mason-registry`.
-> It is already configured in `lua/plugins/lsp.lua`. Run `:MasonUpdate` then
-> `:MasonInstall roslyn` on first setup.
+### JS / TS
+- Node.js, and `prettier` (Mason) for formatting.
 
 ---
 
-## Nerd Font
+## Language servers (Mason)
 
-All icons in the statusline, completion menu, file explorer, and git signs
-use Nerd Font codepoints. Install any [Nerd Font](https://www.nerdfonts.com/)
-and set it as your terminal font (e.g. `JetBrainsMono Nerd Font`).
+| Server | Language | Auto-installed? |
+|---|---|---|
+| `lua_ls` | Lua | ✅ `ensure_installed` |
+| `clangd` | C / C++ | ✅ `ensure_installed` |
+| `ts_ls` | JS / TS / React | ✅ `ensure_installed` |
+| **`roslyn`** | **C#** | ❌ **manual — see below** |
+
+> **The one manual step.** `roslyn` is not in `ensure_installed` and lives in a custom
+> registry. Run `:MasonUpdate` then `:MasonInstall roslyn`.
+>
+> If it is missing, `lua/plugins/csharp.lua` finds no dll, sets `cmd = nil`, and falls back
+> to a binary that is not on PATH. C# then opens with **no completion, no hover and no
+> diagnostics, and no error message**. If C# feels dead, check this first with `:Mason`.
+
+The Crashdummyy registry is already configured in `lua/plugins/lsp.lua`.
+
+OmniSharp is deliberately disabled (`vim.lsp.enable("omnisharp", false)`) so it cannot
+double-index alongside Roslyn. `automatic_enable = false` means installing any other
+server does **not** silently start it — servers are enabled explicitly in `lsp.lua`.
+
+---
+
+## Formatters (conform, Mason)
+
+`stylua` (lua) · `clang-format` (c, cpp) · `prettier` (js, ts, jsx, tsx)
+
+There is **no C# formatter configured** — C# formats through Roslyn's LSP formatter via
+`lsp_fallback`. To use csharpier instead, install it with Mason and add
+`csharp = { "csharpier" }` to `formatters_by_ft` in `lua/plugins/formatter.lua`.
 
 ---
 
 ## GitHub Copilot
 
-`copilot.lua` is loaded at startup. Authenticate once with `:Copilot auth`
-inside Neovim. Requires a GitHub Copilot subscription.
+`copilot.lua` loads on `InsertEnter` and feeds the blink completion menu (no inline ghost
+text). Authenticate once with `:Copilot auth`. Requires a Copilot subscription.
+Toggle its completions with `<leader>uc`. Without a subscription, nothing else breaks.
 
 ---
 
-## Anthropic API key (avante.nvim)
+## First launch
 
-AI inline editing (`<leader>ae`) calls the Anthropic API and bills per request.
-
-1. Create `lua/config/secrets.lua` (already gitignored):
-   ```lua
-   vim.env.ANTHROPIC_API_KEY = "sk-ant-..."
-   ```
-2. Get a key from [console.anthropic.com](https://console.anthropic.com/).
-
----
-
-## Claude Code CLI (claudecode.nvim)
-
-AI chat/project integration (`<leader>ac`) uses the Claude CLI via your
-Claude subscription — no API billing.
-
-Install: `npm install -g @anthropic-ai/claude-code`
-Then authenticate once: `claude` in a terminal.
+1. Install the system tools above, and the .NET SDK if you write C#.
+2. Open Neovim — lazy.nvim bootstraps and installs every plugin.
+3. `:MasonUpdate`, then **`:MasonInstall roslyn`** (the C# server; nothing else needs this).
+4. Treesitter parsers compile automatically on `VeryLazy`. `:checkhealth nvim-treesitter`
+   if something looks unhighlighted.
+5. `:Copilot auth` if you use Copilot.
+6. `:checkhealth` to catch anything missing from the table above.
 
 ---
 
-## First-launch checklist
+## Notes
 
-1. Install all system tools above
-2. Open Neovim — lazy.nvim bootstraps and installs all plugins automatically
-3. Run `:MasonUpdate` to refresh registries (pulls Crashdummyy registry)
-4. Run `:MasonInstall roslyn` for C# support
-5. Run `:TSUpdate` if tree-sitter parsers weren't auto-installed
-6. Run `:Copilot auth` to authenticate GitHub Copilot
-7. Add `lua/config/secrets.lua` with your Anthropic API key
-8. Run `claude` in a terminal to authenticate the Claude CLI
+- `lua/config/secrets.lua` is gitignored and no longer used by anything. If you have one
+  from an older checkout, it is dead weight — delete it.
+- Do **not** probe this config with scripted `nvim --headless` runs that enter insert mode.
+  See the comment at the top of `lua/plugins/copilot.lua`.

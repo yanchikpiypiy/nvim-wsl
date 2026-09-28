@@ -28,7 +28,7 @@ nvim-dap + dap-ui.
 | `<leader>p` | Paste from system clipboard |
 | `<leader>vs` | Reload the current config file |
 | `<leader>ut` | Theme picker — hover previews live, `<CR>` keeps it, `<Esc>` reverts (`:Theme <id>` too) |
-| `<leader>up` | Palette tuner — pick a symbol kind, hover swatches (live), `<CR>` saves to `palette.lua` (`:Palette`) |
+| `<leader>up` | Palette tuner — pick a symbol kind, hover swatches (live). `<CR>` saves + steps back, `<Esc>` back one level, `q` quits (`:Palette`) |
 | `<leader>f` | Format buffer (conform) — note: also the file-picker prefix |
 
 ### Motion / editing
@@ -238,13 +238,71 @@ Run from a terminal (the suite is slow + pnpm, so no in-editor plugin):
 - Custom themes live one-per-file in `lua/themes/`. A file returns
   `{ name, desc, base?, setup?, background?, highlights = function() return { Group = spec } end }`.
   `base` names a plugin colorscheme to paint over (Monochrome uses `monochrome.nvim`,
-  Gruvbox Distinct uses `gruvbox`); `setup` runs before it loads, for plugin options;
+  both Gruvbox themes use `gruvbox`); `setup` runs before it loads, for plugin options;
   leave `base` out to start from Neovim's defaults. Drop a file in and it shows up in
   the picker. `:ThemeReload` re-reads the current custom file after you edit it.
-- Monochrome's colours come from `lua/config/palette.lua` (one table, keyed by symbol
-  kind, shared by the treesitter groups and the C# Roslyn tokens). `<leader>up` tunes
-  one key at a time: hover a swatch to see it in the editor, `<CR>` writes it to the file,
-  or type a raw `#rrggbb` and `<CR>`. Add swatches in `lua/config/palette_tuner.lua`.
+
+| Custom theme | Look |
+|---|---|
+| **Monochrome** | greyscale + accents; the only theme driven by `palette.lua` |
+| **Gruvbox Distinct** | gruvbox hard background, Monochrome's warm accents — orange keywords, red methods, rose members |
+| **Gruvbox Classic** | gruvbox hard background and gruvbox's own hues, plus orange comments; keywords split three ways |
+
+Shared gruvbox UI furniture — fg-only git status colours, subtle diff tints, the
+diffview / snacks / neo-tree groups — lives in `lua/config/gruvbox_chrome.lua` rather
+than being duplicated per theme. `build{ white, dim, add, change, delete }` returns the
+table to merge underneath your syntax groups:
+
+```lua
+local chrome = require("config.gruvbox_chrome").build({ white = c.variable, change = c.type })
+return vim.tbl_extend("force", chrome, syntax)
+```
+
+It sits in `config/` and not `themes/` because `theme.lua` treats every file in
+`lua/themes/` as a selectable theme.
+
+### Writing a theme: the Roslyn priority rule
+`lua/config/options.lua` sets `vim.hl.priorities.semantic_tokens = 125` against
+treesitter's 100, so in C# the LSP wins every contest. Two consequences, both of which
+have already cost a debugging session:
+
+- **Never colour `@lsp.type.variable` / `@lsp.type.local`.** Roslyn tags everything it
+  has not resolved *yet* as `variable`. Colouring that paints most of a C# buffer flat
+  and hides treesitter's correct method and type colours — leave them `{}` so
+  treesitter shows through.
+- **Leave `@lsp.type.keyword` / `@lsp.type.controlKeyword` empty if you want granular
+  keywords.** Roslyn collapses `public`, `class`, `return` and `is` into one token type,
+  which in C# measured a quarter of all coloured glyphs. Treesitter's
+  `@keyword.modifier` / `@keyword.type` / `@keyword.return` captures only surface once
+  the LSP group stops overriding them. The trade: keyword colour then depends on
+  treesitter, so it drops out in buffers over 256KB where highlighting is disabled.
+
+`:Inspect` on a symbol lists every group applying there in priority order — use it
+before hunting for the right key.
+
+### Palette tuner
+Monochrome's colours come from `lua/config/palette.lua`: one table keyed by symbol kind,
+fanned out to **both** engines — the `method` key alone reaches `@function.method`,
+`@function.method.call`, `@lsp.type.method.cs`, `@lsp.type.extensionMethod.cs` and
+`@lsp.type.operatorOverloaded.cs`, so one swatch recolours C++ and C# together.
+
+`<leader>up` / `:Palette` tunes one key at a time. Hover a swatch to see it live in the
+editor, then:
+
+| Key | Action |
+|-----|--------|
+| `<CR>` | save to `palette.lua`, then step back to the kind list |
+| `<Esc>` | back one level — from the kind list, close |
+| `q` | quit outright, reverting the colour being previewed |
+
+Typing a colour in the filter box works too — `#rrggbb`, `#rgb`, or a bare `rrggbb`. A
+highlighted swatch wins, so a typed hex only applies when nothing matched (`q` is an
+ordinary letter while the box has text, so `aqua` is still searchable). Add swatches in
+`lua/config/palette_tuner.lua`.
+
+**The tuner only drives Monochrome** and switches you to it on open. The Gruvbox themes
+don't read `palette.lua` — edit the `c` table at the top of their file, then
+`:ThemeReload`.
 
 ## Notes
 - `<leader>f` is bound to **format** *and* is the prefix for the find group — pressing
