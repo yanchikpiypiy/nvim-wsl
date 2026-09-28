@@ -1,7 +1,12 @@
 -- Palette tuner for the Monochrome theme: pick a symbol kind, hover swatches,
 -- watch the editor recolour live, <CR> writes the hex into lua/config/palette.lua.
---   <leader>up   open        Esc  put the old colour back
--- In the swatch picker you can also type a raw hex (#rrggbb) and press <CR>.
+--
+-- Two levels, and you can walk back up:
+--   <leader>up  open           kind list -> swatch list
+--   <CR>        save, then drop back to the kind list (tune the next one)
+--   <Esc>       back one level -- from the kind list, that closes
+--   q           quit outright, reverting the colour being previewed
+-- Typing a hex in the swatch filter picks it directly: #rrggbb, #rgb or bare rrggbb.
 local M = {}
 
 local palette_file = vim.fs.joinpath(vim.fn.stdpath("config"), "lua", "config", "palette.lua")
@@ -52,11 +57,34 @@ end
 
 local function is_hex(s) return type(s) == "string" and s:match("^#%x%x%x%x%x%x$") ~= nil end
 
+-- Accepts "#rrggbb", "#rgb" and a bare "rrggbb" so the filter box doubles as a
+-- hex entry. Returns nil when the text is just a search term.
+local function norm_hex(s)
+    s = (s or ""):gsub("%s", ""):lower():gsub("^#", "")
+    if s:match("^%x%x%x$") then s = s:gsub("(%x)", "%1%1") end
+    return s:match("^%x%x%x%x%x%x$") and ("#" .. s) or nil
+end
+
+-- Every colorscheme starts with `:hi clear`, which wipes these swatch groups and
+-- leaves the picker drawing every swatch in the default foreground -- i.e. all
+-- white. A live preview reloads a colorscheme on each keypress, so re-register
+-- them whenever one lands.
+local function define_swatches()
+    for _, sw in ipairs(M.swatches) do swatch_hl(sw[2]) end
+    for _, job in ipairs(M.jobs) do
+        local hex = palette()[job.key]
+        if is_hex(hex) then swatch_hl(hex) end
+    end
+end
+
+vim.api.nvim_create_autocmd("ColorScheme", { callback = define_swatches })
+
 -- Mutate the loaded palette and repaint. Monochrome is the only palette-driven
 -- theme, so the tuner always previews on it.
 local function preview(key, hex)
     palette()[key] = hex
     require("config.theme").apply("monochrome")
+    define_swatches()  -- a theme with no `base` repaints without firing ColorScheme
 end
 
 local function persist(key, hex)
@@ -97,9 +125,27 @@ local sample_cpp = {
     "} // namespace yanmesh",
 }
 
-local function pick_colour(job)
+-- `q` quits from anywhere, but "gruvbox aqua" / "everforest aqua" are swatch
+-- names and the filter box starts in insert mode -- so q only quits once the
+-- box is empty, and stays an ordinary letter while you are typing.
+local function quit_action(mark)
+    return function(picker)
+        if picker:filter().pattern ~= "" then
+            vim.api.nvim_feedkeys("q", "n", false)
+            return
+        end
+        if mark then mark() end
+        picker:close()
+    end
+end
+
+-- Remembered so walking back up lands on the kind you were just editing.
+local last_idx = 1
+
+local function pick_colour(job, job_idx)
     local before = palette()[job.key]
-    local confirmed = false
+    -- "quit" reverts and stops, "back" reverts and reopens, "saved" keeps and reopens.
+    local outcome = "quit"
 
     local items = {}
     for i, sw in ipairs(M.swatches) do
@@ -107,7 +153,6 @@ local function pick_colour(job)
     end
 
     local function finish(hex)
-        confirmed = true
         preview(job.key, hex)
         if persist(job.key, hex) then
             vim.notify(("palette.%s = %s  (saved)"):format(job.key, hex), vim.log.levels.INFO)
@@ -118,9 +163,23 @@ local function pick_colour(job)
 
     Snacks.picker.pick({
         source = "palette_colour",
-        title = (" %s  (%s)  now %s "):format(job.key, job.desc, before),
+        title = (" %s · %s · was %s   <CR> save   <Esc> back   q quit "):format(job.key, job.desc, before),
         items = items,
         layout = { preset = "vertical" },
+        win = {
+            input = { keys = {
+                ["<Esc>"] = { "tuner_back", mode = { "i", "n" } },
+                ["q"]     = { "tuner_quit", mode = { "i", "n" } },
+            } },
+            list = { keys = {
+                ["<Esc>"] = "tuner_back",
+                ["q"]     = "tuner_quit",
+            } },
+        },
+        actions = {
+            tuner_back = function(picker) outcome = "back"; picker:close() end,
+            tuner_quit = quit_action(function() outcome = "quit" end),
+        },
         format = function(item)
             return {
                 { item.hex == before and "● " or "  ", "SnacksPickerSpecial" },
@@ -141,37 +200,56 @@ local function pick_colour(job)
             end
         end,
         confirm = function(picker, item)
-            local typed = vim.trim(picker:filter().pattern)
+            local hex = (item and item.hex) or norm_hex(picker:filter().pattern)
+            if not hex then return end
+            outcome = "saved"
             picker:close()
-            if item then
-                vim.schedule(function() finish(item.hex) end)
-            elseif is_hex(typed) then
-                vim.schedule(function() finish(typed) end)
-            end
+            vim.schedule(function()
+                finish(hex)
+                M.pick({ idx = job_idx })
+            end)
         end,
         on_close = function()
-            if not confirmed and palette()[job.key] ~= before then
+            if outcome ~= "saved" and palette()[job.key] ~= before then
                 vim.schedule(function() preview(job.key, before) end)
+            end
+            if outcome == "back" then
+                vim.schedule(function() M.pick({ idx = job_idx }) end)
             end
         end,
     })
 end
 
-function M.pick()
+---@param opts? { idx?: integer } idx: kind to put the cursor on when reopening
+function M.pick(opts)
+    opts = opts or {}
     local T = require("config.theme")
     if T.current ~= "monochrome" then
         T.apply("monochrome")
         vim.notify("Palette tuner previews on Monochrome (switched for now)", vim.log.levels.INFO)
     end
+    last_idx = opts.idx or last_idx
     local items = {}
     for i, job in ipairs(M.jobs) do
         items[i] = { idx = i, text = job.key .. " " .. job.desc, job = job }
     end
     Snacks.picker.pick({
         source = "palette_job",
-        title = " Palette: what to recolour ",
+        title = " Palette · what to recolour   <CR> pick colour   <Esc>/q close ",
         items = items,
         layout = { preset = "vertical" },
+        win = {
+            input = { keys = { ["q"] = { "tuner_quit", mode = { "i", "n" } } } },
+            list  = { keys = { ["q"] = "tuner_quit" } },
+        },
+        actions = { tuner_quit = quit_action() },
+        -- Deferred: the list is not rendered yet when on_show fires. pcall'd so a
+        -- snacks internals change costs us the cursor position, not the picker.
+        on_show = function(picker)
+            if last_idx > 1 then
+                vim.schedule(function() pcall(function() picker.list:view(last_idx) end) end)
+            end
+        end,
         format = function(item)
             local hex = palette()[item.job.key] or "#000000"
             return {
@@ -189,7 +267,10 @@ function M.pick()
         end,
         confirm = function(picker, item)
             picker:close()
-            if item then vim.schedule(function() pick_colour(item.job) end) end
+            if item then
+                last_idx = item.idx
+                vim.schedule(function() pick_colour(item.job, item.idx) end)
+            end
         end,
     })
 end
