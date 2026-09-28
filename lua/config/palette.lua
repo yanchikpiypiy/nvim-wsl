@@ -8,7 +8,7 @@
 -- if you re-tint later.
 return {
     type      = "#F9E2AF", -- types: class, struct, enum, record, delegate, generics (gold)
-    interface = "#94e2d5", -- interfaces: a contract reads differently from a concrete type (teal)
+    interface = "#cba6f7", -- interfaces: a contract reads differently from a concrete type (mauve)
     method    = "#e85c6a", -- methods, extension methods, operator overloads (red)
     func      = "#d8bdf3", -- static methods & free functions (lavender)
     import    = "#9a6dd7", -- #include / preprocessor directives (purple, with the keywords)
@@ -17,6 +17,6 @@ return {
     variable  = "#eeeeee", -- variables, parameters, locals (white)
     keyword   = "#9a6dd7", -- keywords, control flow, preprocessor (purple)
     string    = "#d0ccc0", -- strings (light grey with a hint of yellow)
-    comment   = "#5e5e5e", -- comments (dim grey)
+    comment   = "#fe8019", -- comments (orange)
     namespace = "#a6a6a6", -- namespaces: std::, YanMesh:: (recede, grey)
 }
