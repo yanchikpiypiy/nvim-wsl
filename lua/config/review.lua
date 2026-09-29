@@ -222,7 +222,13 @@ local function resolve(tree, scope)
     end
     local rev = first(tree, { "rev-parse", "--verify", "--quiet", scope.ref .. "^{commit}" })
     if not rev then return nil, "unknown ref " .. scope.ref end
-    return rev
+    -- Against this branch's own remote copy, compare tips: a rebased branch only shares history below the
+    -- whole stack. Against any other branch, compare from where they split, or its changes show reversed.
+    local picked = scope.ref:gsub("^remotes/", "")
+    local branch = first(tree, { "rev-parse", "--abbrev-ref", "HEAD" })
+    local upstream = first(tree, { "rev-parse", "--abbrev-ref", "HEAD@{upstream}" })
+    if picked == upstream or (branch and picked == "origin/" .. branch) then return rev end
+    return first(tree, { "merge-base", "HEAD", rev }) or rev
 end
 
 local function make_label(tree, scope, main, name)
@@ -585,11 +591,23 @@ function M.scope_menu()
         { "Since a commit — everything after it, plus uncommitted", function()
             pick_commit(s.home, "Review changes since", function(sha) M.set_scope({ kind = "since", ref = sha }) end)
         end },
-        { "Against any branch / ref", function()
+        { "Against another branch — only what this branch changed since it split from it", function()
+            local upstream = {}
+            for _, row in ipairs(git(s.home, { "for-each-ref", "--format=%(refname:short)%09%(upstream:short)%09%(upstream:track)", "refs/heads/" }) or {}) do
+                local name, up, track = row:match("^([^\t]*)\t([^\t]*)\t(.*)$")
+                if name then upstream[name] = up == "" and "local only" or track:find("gone") and "gone" or "local" end
+            end
+            local label_hl = { current = "GitReviewAdd", ["local"] = "GitReviewKey", ["local only"] = "GitReviewLocal", gone = "GitReviewDel", remote = "GitReviewDim" }
             Snacks.picker.git_branches({
                 all = true,
                 cwd = s.home,
                 title = "Review against…",
+                format = function(item, picker)
+                    local b = item.branch or ""
+                    local label = item.current and "current" or b:match("^remotes/") and "remote" or upstream[b] or "local"
+                    return vim.list_extend({ { string.format("%-11s", label), label_hl[label] } },
+                        require("snacks.picker.format").git_branch(item, picker))
+                end,
                 confirm = function(picker, item)
                     picker:close()
                     local ref = item and (item.branch or item.commit)
