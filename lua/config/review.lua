@@ -300,7 +300,6 @@ local ST_HL = { A = "GitReviewAdd", ["?"] = "GitReviewAdd", D = "GitReviewDel" }
 local HELP = {
     { "<CR> o", "open file · on a commit: review it" },
     { "p", "diff preview (delta)" },
-    { "d", "side-by-side diff · ]c [c hunks · q closes" },
     { "v", "mark viewed" },
     { "]r [r", "next / prev file (from anywhere)" },
     { "]c [c", "next / prev hunk (in the file)" },
@@ -507,25 +506,6 @@ local function open_file(s, f)
     vim.cmd("edit " .. vim.fn.fnameescape(vim.fs.joinpath(s.tree, f.path)))
 end
 
--- Side-by-side against the review base: ]c / [c walk the hunks, q closes the base split.
-local function diff_file(s, f)
-    open_file(s, f)
-    if f.status == "D" then return end
-    local ok, gs = pcall(require, "gitsigns")
-    if not ok then return notify("gitsigns is not available", vim.log.levels.WARN) end
-    local fbuf = vim.api.nvim_get_current_buf()
-    gs.diffthis(s.base)
-    vim.keymap.set("n", "q", function()
-        vim.cmd("diffoff!")
-        for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-            if vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(win)):match("^gitsigns://") then
-                pcall(vim.api.nvim_win_close, win, true)
-            end
-        end
-        pcall(vim.keymap.del, "n", "q", { buffer = fbuf })
-    end, { buffer = fbuf, nowait = true, silent = true, desc = "Close diff" })
-end
-
 local function focus_panel_on(s, f)
     local w = panel_win(s)
     if not (w and s.map) then return end
@@ -593,21 +573,6 @@ function M.review_commit(sha)
     end)
 end
 
-function M.pick_base()
-    local s = M.s
-    if not s then return end
-    Snacks.picker.git_branches({
-        all = true,
-        cwd = s.home,
-        title = "Review against…",
-        confirm = function(picker, item)
-            picker:close()
-            local ref = item and (item.branch or item.commit)
-            if ref then M.set_scope({ kind = "ref", ref = vim.trim(ref) }) end
-        end,
-    })
-end
-
 function M.scope_menu()
     local s = M.s
     if not s then return end
@@ -620,7 +585,18 @@ function M.scope_menu()
         { "Since a commit — everything after it, plus uncommitted", function()
             pick_commit(s.home, "Review changes since", function(sha) M.set_scope({ kind = "since", ref = sha }) end)
         end },
-        { "Against any branch / ref", function() M.pick_base() end },
+        { "Against any branch / ref", function()
+            Snacks.picker.git_branches({
+                all = true,
+                cwd = s.home,
+                title = "Review against…",
+                confirm = function(picker, item)
+                    picker:close()
+                    local ref = item and (item.branch or item.commit)
+                    if ref then M.set_scope({ kind = "ref", ref = vim.trim(ref) }) end
+                end,
+            })
+        end },
     }
     vim.ui.select(choices, {
         prompt = "Review scope",
@@ -818,7 +794,6 @@ local function set_keys(s, b)
     k("<CR>", open, "Open")
     k("o", open, "Open")
     k("p", on_item(function(it) if it.file then preview(s, it.file) end end), "Diff preview")
-    k("d", on_item(function(it) if it.file then diff_file(s, it.file) end end), "Side-by-side diff")
     k("v", on_item(function(it)
         if not it.file then return end
         local key = viewed_key(s, it.file)

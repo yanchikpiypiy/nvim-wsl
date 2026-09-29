@@ -120,11 +120,11 @@ to match, so `]c`/`[c` walk exactly that scope's hunks.
 
 | Key | Action |
 |-----|--------|
-| `<leader>gn` | Start a review / focus the panel / hide it (when already in it) || `]r` / `[r` | Next / previous review file, from anywhere (echoes `[3/7] path`) |
+| `<leader>gn` | Start a review / focus the panel / hide it (when already in it) |
+| `]r` / `[r` | Next / previous review file, from anywhere (echoes `[3/7] path`) |
 | `<leader>ga` | Gitsigns refresh (re-diff all buffers against the current base) |
 | in panel: `<CR>` / `o` | Open file in the main window · on a commit line: review that commit |
 | in panel: `p` | Full-file diff in a float, through delta (`q`/`<Esc>` closes) |
-| in panel: `d` | Side-by-side diff against the review base: `]c`/`[c` walk hunks, `q` closes the base split |
 | in panel: `v` | Toggle viewed ✓ and move to the next file |
 | in panel: `s` | Scope: branch vs main · uncommitted only · one commit · since a commit · any ref |
 | in panel: `w` | Review something else: pick Worktrees, Local branches, Open PRs (gh) or Remote-only branches, then one from that list |
