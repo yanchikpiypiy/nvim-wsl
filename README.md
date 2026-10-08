@@ -128,6 +128,7 @@ to match, so `]c`/`[c` walk exactly that scope's hunks.
 | in panel: `v` | Toggle viewed ✓ and move to the next file |
 | in panel: `s` | Scope: branch vs main · uncommitted only · one commit · since a commit · any ref |
 | in panel: `w` | Review something else: pick Worktrees, Local branches, Open PRs (gh) or Remote-only branches, then one from that list |
+| in panel: `l` | Start Roslyn inside a review copy (off by default) |
 | in panel: `r` / `q` / `Q` / `?` | Refresh (re-resolve base) · hide · end review · key help |
 
 How it behaves:
@@ -137,8 +138,8 @@ How it behaves:
 - **Other branches / PRs never block anything.** `w` builds a throwaway copy under
   `../<repo>.review/` (a detached worktree at the branch's commit; PRs are fetched as
   `pull/<n>/head`), so no branch is locked and no branch is created. Local branches,
-  remote-only branches (`origin/*`) and open PRs are all listed. Files open from that copy,
-  so LSPs start a second root there.
+  remote-only branches (`origin/*`) and open PRs are all listed. Files open from that copy;
+  Roslyn stays off there (a copy would cold-load the whole solution) until `l` in the panel.
 - **One commit is isolated** in the same way (`../<repo>.review/_commit`, base = its parent).
 - **Copies are always cleaned up**: switching to another review, `Q`, and quitting nvim
   force-remove them (their buffers and LSP clients are closed first), and starting a review

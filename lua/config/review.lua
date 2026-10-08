@@ -311,6 +311,7 @@ local HELP = {
     { "]c [c", "next / prev hunk (in the file)" },
     { "s", "change scope" },
     { "w", "review another branch / PR / worktree" },
+    { "l", "start Roslyn in this review copy (off by default)" },
     { "r", "refresh (re-resolve base)" },
     { "q", "hide panel (<leader>gn reopens)" },
     { "Q", "end review" },
@@ -602,6 +603,7 @@ function M.scope_menu()
                 all = true,
                 cwd = s.home,
                 title = "Review against…",
+                transform = gitutil.branch_filter(s.home),
                 format = function(item, picker)
                     local b = item.branch or ""
                     local label = item.current and "current" or b:match("^remotes/") and "remote" or upstream[b] or "local"
@@ -695,7 +697,7 @@ local function local_branch_items(cwd)
     return items
 end
 
--- Unmerged remote branches with no local copy, capped.
+-- Unmerged remote branches with no local copy, newest first.
 local function remote_branch_items(cwd)
     local main = gitutil.main_base(cwd, true)
     if not main then return {} end
@@ -715,7 +717,6 @@ local function remote_branch_items(cwd)
                 text = string.format("%s  %s · %s", name, when, subj),
                 kind = "branch", name = name, ref = "refs/remotes/origin/" .. name,
             }
-            if #items >= 30 then break end
         end
     end
     return items
@@ -791,6 +792,17 @@ function M.jump(dir)
     vim.api.nvim_echo({ { string.format("[%d/%d] %s", f.idx, n, f.path) } }, false, {})
 end
 
+-- Roslyn is off in review copies by default (see plugins/csharp.lua); this opts this review in.
+function M.enable_lsp()
+    vim.g.review_roslyn = true
+    for _, b in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_is_loaded(b) and vim.bo[b].filetype == "cs" then
+            vim.api.nvim_exec_autocmds("FileType", { buffer = b, modeline = false })
+        end
+    end
+    notify("Roslyn on for this review (cold start: give it a minute)")
+end
+
 function M.hide()
     local w = M.s and panel_win(M.s)
     if w and not pcall(vim.api.nvim_win_close, w, false) then
@@ -822,6 +834,7 @@ local function set_keys(s, b)
     end), "Toggle viewed")
     k("s", M.scope_menu, "Scope")
     k("w", M.tree_menu, "Tree / branch / PR")
+    k("l", M.enable_lsp, "Start Roslyn here")
     k("r", function() apply(s, s.tree, s.scope) end, "Refresh")
     k("q", M.hide, "Hide panel")
     k("Q", M.stop, "End review")
@@ -880,6 +893,7 @@ function M.stop()
     local s = M.s
     if not s then return end
     M.s = nil
+    vim.g.review_roslyn = nil
     set_base(nil)
     local o = s.origin
     local target = (o.win and vim.api.nvim_win_is_valid(o.win) and o.win ~= s.win) and o.win or main_win(s)

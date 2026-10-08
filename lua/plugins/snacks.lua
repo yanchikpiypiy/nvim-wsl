@@ -81,9 +81,24 @@ return {
         { "<leader>gf", function() Snacks.picker.git_files() end,    desc = "Git files (tracked)" },
         { "<leader>gt", function() Snacks.picker.git_status() end,   desc = "Git status (changed files)" },
         -- To review a branch/commit without checking it out: <leader>gn, then w / s.
-        { "<leader>gc", function() Snacks.picker.git_log() end,      desc = "Git commits (log)" },
+        {
+            "<leader>gc",
+            function()
+                local range = require("config.gitutil").branch_range(root())
+                Snacks.picker.git_log({ cwd = root(), cmd_args = range and { range } or nil })
+            end,
+            desc = "Git commits (this branch's own, else full log)",
+        },
+        { "<leader>gA", function() Snacks.picker.git_log({ cwd = root() }) end, desc = "Git commits (full log)" },
         { "<leader>gC", function() Snacks.picker.git_log_file() end, desc = "Git commits (this file)" },
-        { "<leader>gl", function() Snacks.picker.git_branches() end, desc = "Git branches" },
+        {
+            "<leader>gl",
+            function()
+                Snacks.picker.git_branches({ cwd = root(), transform = require("config.gitutil").branch_filter(root()) })
+            end,
+            desc = "Git branches (active only)",
+        },
+        { "<leader>gL", function() Snacks.picker.git_branches({ all = true }) end, desc = "Git branches (everything)" },
         { "<leader>gz", function() Snacks.picker.git_stash() end,    desc = "Git stash" },
         -- Hunk lists rendered through delta (j/k = next/prev hunk, preview on the right).
         -- gv: uncommitted hunks (Tab stages the hunk under the cursor).

@@ -24,8 +24,56 @@ return {
             }
             or nil -- fall back to roslyn.nvim's default if the dll isn't there
 
+        -- Review copies (../<repo>.review/*, see config/review.lua) are throwaway worktrees
+        -- with no obj/ folders, so each one would cold-start its own Roslyn and load the whole
+        -- solution. Skip them unless the review panel's `l` opts in (vim.g.review_roslyn).
+        --
+        -- Also: when the nearest .csproj is in no solution, the plugin falls back to a server
+        -- rooted at that project alone. cris-erm-tfs has exactly that: an orphan
+        -- Core/Domain/Infonetica.ERM.Domain.csproj over 3.2k files that Core.csproj actually
+        -- compiles, so nearly every ERM file spun up a second Roslyn. Prefer a solution above.
+        local sln_utils = require("roslyn.sln.utils")
+
+        -- Widest solution wins, so cross-project navigation resolves (ERM.sln over unit-tests.sln).
+        local project_counts = {} -- root_dir runs on every C# buffer open; don't re-parse the .sln each time
+        local function widest(targets)
+            local sln_api = require("roslyn.sln.api")
+            local best, best_count
+            for _, target in ipairs(targets) do
+                if not project_counts[target] then
+                    local ok, projects = pcall(sln_api.projects, target)
+                    project_counts[target] = ok and #projects or 0
+                end
+                local count = project_counts[target]
+                if not best_count or count > best_count then
+                    best, best_count = target, count
+                end
+            end
+            return best or targets[1]
+        end
+
+        local plugin_root_dir = vim.lsp.config.roslyn.root_dir
+        local function root_dir(bufnr, on_dir)
+            local name = vim.api.nvim_buf_get_name(bufnr):gsub("\\", "/")
+            if name:find("%.review/") and not vim.g.review_roslyn then return end
+            plugin_root_dir(bufnr, function(dir)
+                local sols = sln_utils.find_solutions(bufnr)
+                local is_sln_root = vim.iter(sols):any(function(s) return vim.fs.dirname(s) == dir end)
+                if #sols > 0 and not is_sln_root then dir = vim.fs.dirname(widest(sols)) end
+                on_dir(dir)
+            end)
+        end
+
+        -- on_init re-picks the solution with the same csproj filter, so an orphan-project buffer
+        -- that starts the client would otherwise still load the lone csproj.
+        local predict_target = sln_utils.predict_target
+        sln_utils.predict_target = function(bufnr, targets)
+            return predict_target(bufnr, targets) or (#targets > 0 and widest(targets) or nil)
+        end
+
         vim.lsp.config("roslyn", {
             cmd = roslyn_cmd,
+            root_dir = root_dir,
             capabilities = capabilities,
             settings = {
                 ["csharp|inlay_hints"] = {
@@ -151,18 +199,7 @@ return {
             -- with 5, and the test projects are in both). Pick the widest one
             -- so cross-project navigation resolves, instead of whichever the
             -- directory walk happened to return first.
-            choose_target = function(targets)
-                local sln_api = require("roslyn.sln.api")
-                local best, best_count
-                for _, target in ipairs(targets) do
-                    local ok, projects = pcall(sln_api.projects, target)
-                    local count = ok and #projects or 0
-                    if not best_count or count > best_count then
-                        best, best_count = target, count
-                    end
-                end
-                return best or targets[1]
-            end,
+            choose_target = widest,
         })
     end,
 }
