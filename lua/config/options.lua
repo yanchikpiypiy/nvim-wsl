@@ -11,6 +11,7 @@ opt.tabstop = 4
 opt.smartindent = true
 opt.signcolumn = "yes"
 opt.termguicolors = true
+opt.guicursor = "a:block"
 -- Prefer LF, but auto-detect and consume CRLF (dos) so SDK/decompiled
 -- metadata sources don't render every line ending as a literal ^M.
 opt.fileformats = { "unix", "dos" }
