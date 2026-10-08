@@ -97,6 +97,38 @@ return {
         --
         -- No-op when there's no rev base, or when the file exists at the base
         -- (gitsigns handles those normally), or when already rescued.
+        -- Tracked files absent at `base`, one git call per (tree, base). Per-buffer git calls cost
+        -- 170-660ms on Windows and ran on every review jump.
+        local added_cache = {}
+        local function added_since(top, base)
+            local key = top .. "\0" .. base
+            if not added_cache[key] then
+                local set = {}
+                for _, p in ipairs(vim.fn.systemlist({ "git", "-C", top, "-c", "core.quotePath=false",
+                    "diff", "--name-only", "--no-renames", "--diff-filter=A", base })) do
+                    set[p] = true
+                end
+                added_cache[key] = set
+            end
+            return added_cache[key]
+        end
+
+        -- Read from disk rather than `git rev-parse`: a worktree's .git is a "gitdir: <path>" file.
+        local function gitdir_of(top)
+            local dotgit = top .. "/.git"
+            if vim.fn.isdirectory(dotgit) == 1 then return dotgit end
+            local p = ((vim.fn.readfile(dotgit, "", 1))[1] or ""):match("^gitdir:%s*(.-)%s*$")
+            if not p then return dotgit end
+            if not p:match("^%a:") and not p:match("^/") then p = top .. "/" .. p end
+            return vim.fs.normalize(p)
+        end
+
+        local function poll(cond, tries, done)
+            if cond() then return done(true) end
+            if tries <= 0 then return done(false) end
+            vim.defer_fn(function() poll(cond, tries - 1, done) end, 100)
+        end
+
         local function fixup_added(buf)
             buf = buf or vim.api.nvim_get_current_buf()
             local base = require("gitsigns.config").config.base
@@ -105,15 +137,11 @@ return {
             if base == "" or base == EMPTY_TREE then return end
             local name = vim.api.nvim_buf_get_name(buf)
             if name == "" or vim.fn.filereadable(name) == 0 then return end
-            local dir = vim.fn.fnamemodify(name, ":h")
-            -- Repo-relative path (forward slashes, matches git's tree lookup).
-            local rel = vim.fn.systemlist({ "git", "-C", dir, "ls-files", "--full-name", "--", name })
-            if vim.v.shell_error ~= 0 or not rel[1] or rel[1] == "" then return end
-            -- Does the file exist at the base commit? cat-file -e is silent+cheap.
-            -- (For a rename, rel is the NEW path, which is absent at the base — so
-            -- renames fall through to the rescue and render as a whole-file add.)
-            vim.fn.system({ "git", "-C", dir, "cat-file", "-e", base .. ":" .. rel[1] })
-            if vim.v.shell_error == 0 then return end -- present at base → normal diff is fine
+            local top = vim.fs.root(name, ".git")
+            if not top then return end
+            local rel = vim.fs.normalize(name):sub(#vim.fs.normalize(top) + 2)
+            -- Present at base → gitsigns diffs it normally. Renames count as added (whole-file add).
+            if not added_since(top, base)[rel] then return end
 
             local cache = require("gitsigns.cache")
             -- Idempotent: skip if this buffer is already rescued against this base
@@ -124,38 +152,77 @@ return {
                 return
             end
 
+            if vim.b[buf].gs_rescuing == base then return end
+            vim.b[buf].gs_rescuing = base
+
             local manager = require("gitsigns.manager")
-            local top = vim.fn.systemlist({ "git", "-C", dir, "rev-parse", "--show-toplevel" })[1]
-            local gitdir = vim.fn.systemlist({ "git", "-C", dir, "rev-parse", "--absolute-git-dir" })[1]
-            local ctx = { file = name, toplevel = top, gitdir = gitdir, base = "HEAD" }
+            local ctx = { file = name, toplevel = top, gitdir = gitdir_of(top), base = "HEAD" }
+            local function finish()
+                if vim.api.nvim_buf_is_valid(buf) then vim.b[buf].gs_rescuing = nil end
+            end
+            local function stale()
+                return not vim.api.nvim_buf_is_valid(buf)
+                    or vim.trim(tostring(require("gitsigns.config").config.base or "")) ~= base
+            end
             pcall(gs.detach, buf)
             -- Attach against HEAD so a cache entry gets built for a file the rev
             -- base can't see. gitsigns' own auto-attach (against the rev base,
             -- which fails for this file) may already be in-flight for this buffer;
             -- gs.attach is throttled per-buffer, so a single call can be DROPPED.
             -- Retry until our HEAD attach actually lands a cache entry (bounded).
-            local c
-            for _ = 1, 20 do
+            -- Every wait is a timer poll: vim.wait here froze the UI for seconds on new files.
+            local attempts = 0
+            local function try_attach()
+                if stale() then return finish() end
                 if not cache.cache[buf] then gs.attach({ bufnr = buf, ctx = ctx }) end
-                vim.wait(200, function() return cache.cache[buf] ~= nil end)
-                c = cache.cache[buf]
-                if c then break end
+                poll(function() return cache.cache[buf] ~= nil end, 2, function(attached)
+                    attempts = attempts + 1
+                    if not attached then
+                        if attempts < 20 then return try_attach() end
+                        return finish()
+                    end
+                    local c = cache.cache[buf]
+                    -- Wait for the first update to populate compare_text (force one if the
+                    -- update deferred), so blanking it below can't be overwritten.
+                    poll(function() return c.compare_text ~= nil end, 15, function(ready)
+                        if not ready then pcall(manager.update, buf) end
+                        poll(function() return c.compare_text ~= nil end, 15, function()
+                            if stale() then return finish() end
+                            c.compare_text = {}      -- empty base → whole buffer is "added"
+                            c.compare_text_head = {}
+                            pcall(manager.update, buf) -- recompute hunks from the now-empty base
+                            vim.b[buf].gs_rescued_base = base
+                            finish()
+                        end)
+                    end)
+                end)
             end
-            if not c then return end
-            -- Wait for the first update to populate compare_text (force one if the
-            -- update deferred), so blanking it below can't be overwritten.
-            if not vim.wait(1500, function() return c.compare_text ~= nil end) then
-                pcall(manager.update, buf)
-                vim.wait(1500, function() return c.compare_text ~= nil end)
-            end
-            c.compare_text = {}      -- empty base → whole buffer is "added"
-            c.compare_text_head = {}
-            pcall(manager.update, buf) -- recompute hunks from the now-empty base
-            vim.b[buf].gs_rescued_base = base
+            try_attach()
         end
+
+        -- gitsigns drops compare_text on several paths (OptionSet fileformat, re-attach, its
+        -- .git watcher) and refetches it from HEAD, silently undoing a rescue. Re-blank after
+        -- any update that did that; the #compare_text > 0 check stops it looping.
+        vim.api.nvim_create_autocmd("User", {
+            pattern = "GitSignsUpdate",
+            group = vim.api.nvim_create_augroup("GitsignsAddedKeep", { clear = true }),
+            callback = function(args)
+                local buf = args.data and args.data.buffer
+                if not (buf and vim.api.nvim_buf_is_valid(buf)) then return end
+                local base = vim.trim(tostring(require("gitsigns.config").config.base or ""))
+                if base == "" or vim.b[buf].gs_rescued_base ~= base then return end
+                local c = require("gitsigns.cache").cache[buf]
+                if c and c.compare_text and #c.compare_text > 0 then
+                    c.compare_text = {}
+                    c.compare_text_head = {}
+                    pcall(require("gitsigns.manager").update, buf)
+                end
+            end,
+        })
 
         -- Sweep every listed buffer through fixup_added (used after a base switch).
         local function fixup_all()
+            added_cache = {}
             for _, buf in ipairs(vim.api.nvim_list_bufs()) do
                 if vim.api.nvim_buf_is_loaded(buf) then pcall(fixup_added, buf) end
             end
