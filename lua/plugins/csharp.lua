@@ -1,5 +1,6 @@
 return {
     "seblyng/roslyn.nvim",
+    commit = "b4954e97e145bd8129b3bbe99809759f6ced2235", -- pinned: root_dir patch below uses roslyn.sln.utils (removed upstream)
     event = "VeryLazy",
     dependencies = { "williamboman/mason.nvim", "saghen/blink.cmp" },
     config = function()
