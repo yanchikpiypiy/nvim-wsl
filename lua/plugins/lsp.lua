@@ -43,6 +43,29 @@ vim.lsp.handlers["textDocument/publishDiagnostics"] = function(err, result, ctx,
     orig_diagnostic_handler(err, result, ctx, config)
 end
 
+-- One set of LSP keymaps for every server (roslyn included)
+vim.api.nvim_create_autocmd("LspAttach", {
+    group = vim.api.nvim_create_augroup("LspKeymaps", { clear = true }),
+    callback = function(args)
+        local client = vim.lsp.get_client_by_id(args.data.client_id)
+        if client and client.name == "copilot" then return end -- attaches everywhere; not a code server
+        local sp = require("snacks").picker
+        local function map(lhs, rhs, desc)
+            vim.keymap.set("n", lhs, rhs, { buffer = args.buf, desc = desc })
+        end
+        map("K", vim.lsp.buf.hover, "Hover docs")
+        map("gd", sp.lsp_definitions, "Go to definition")
+        map("gD", vim.lsp.buf.declaration, "Go to declaration")
+        map("gr", sp.lsp_references, "Find references")
+        map("gi", sp.lsp_implementations, "Go to implementation")
+        map("gy", sp.lsp_type_definitions, "Go to type definition")
+        map("<leader>rn", vim.lsp.buf.rename, "Rename symbol")
+        map("<leader>ca", vim.lsp.buf.code_action, "Code action")
+        map("<leader>ls", sp.lsp_symbols, "Document symbols")
+        map("<leader>lw", sp.lsp_workspace_symbols, "Workspace symbols")
+        map("<leader>li", "<cmd>LspInfo<CR>", "LSP info")
+    end,
+})
 
 return {
     {
@@ -71,7 +94,6 @@ return {
                     "clangd",   -- C / C++
                     "ts_ls",    -- JS / TS / React
                 },
-                automatic_installation = true,
                 -- CRITICAL: do NOT auto-enable every installed server. Otherwise
                 -- mason-lspconfig calls vim.lsp.enable() on ALL installed servers
                 -- (omnisharp, vtsls, eslint, fsautocomplete...), so C# files get
@@ -95,54 +117,12 @@ return {
             local capabilities = require("blink.cmp").get_lsp_capabilities(
                 vim.lsp.protocol.make_client_capabilities()
             )
-            capabilities.offsetEncoding = { "utf-16" }
-
-            local on_attach = function(client, bufnr)
-                local map = vim.keymap.set
-                local o = { buffer = bufnr, silent = true }
-                local sp = require("snacks").picker
-
-                -- Neovim 0.11+ ships default gr* LSP maps (grn/gra/grr/gri/grt),
-                -- which turn `gr` into a prefix so our `gr` waits for a 2nd key.
-                -- Remove them so our gd/gr/gi/gy scheme fires instantly.
-                for _, k in ipairs({ "grn", "gra", "grr", "gri", "grt" }) do
-                    pcall(vim.keymap.del, "n", k)
-                end
-
-                -- Navigation (all via snacks.picker for consistent preview)
-                map("n", "K",  vim.lsp.buf.hover, vim.tbl_extend("force", o, { desc = "Hover docs" }))
-                map("n", "gd", sp.lsp_definitions,          vim.tbl_extend("force", o, { desc = "Go to definition" }))
-                map("n", "gD", vim.lsp.buf.declaration,     vim.tbl_extend("force", o, { desc = "Go to declaration" }))
-                map("n", "gr", sp.lsp_references,           vim.tbl_extend("force", o, { desc = "Find references" }))
-                map("n", "gi", sp.lsp_implementations,      vim.tbl_extend("force", o, { desc = "Go to implementation" }))
-                map("n", "gy", sp.lsp_type_definitions,     vim.tbl_extend("force", o, { desc = "Go to type definition" }))
-
-                -- Refactoring
-                map("n", "<leader>rn", vim.lsp.buf.rename,       vim.tbl_extend("force", o, { desc = "Rename symbol" }))
-                map("n", "<leader>ca", vim.lsp.buf.code_action,  vim.tbl_extend("force", o, { desc = "Code action" }))
-
-                -- LSP navigation group (<leader>l)
-                map("n", "<leader>ls", sp.lsp_symbols,           vim.tbl_extend("force", o, { desc = "Document symbols" }))
-                map("n", "<leader>lw", sp.lsp_workspace_symbols, vim.tbl_extend("force", o, { desc = "Workspace symbols" }))
-                map("n", "<leader>li", "<cmd>LspInfo<CR>",               vim.tbl_extend("force", o, { desc = "LSP info" }))
-
-                -- Inlay hints (Neovim 0.10+): disabled by default, toggle on with <leader>lh
-                if vim.lsp.inlay_hint and client:supports_method("textDocument/inlayHint") then
-                    map("n", "<leader>lh", function()
-                        vim.lsp.inlay_hint.enable(
-                            not vim.lsp.inlay_hint.is_enabled({ bufnr = bufnr }),
-                            { bufnr = bufnr }
-                        )
-                    end, vim.tbl_extend("force", o, { desc = "Toggle inlay hints" }))
-                end
-            end
 
             -- Lua
             vim.lsp.config.lua_ls = {
                 cmd = { "lua-language-server" },
                 root_markers = { ".luarc.json", ".git" },
                 capabilities = capabilities,
-                on_attach = on_attach,
                 settings = {
                     Lua = {
                         runtime = { version = "LuaJIT" },
@@ -179,7 +159,6 @@ return {
                 },
                 root_markers = { ".clangd", "compile_commands.json", ".git" },
                 capabilities = capabilities,
-                on_attach = on_attach,
                 -- Full-document sync: avoids a Neovim incremental-sync core bug
                 -- (vim/lsp/sync.lua:136 assertion in compute_diff with clangd).
                 flags = { allow_incremental_sync = false },
@@ -196,7 +175,6 @@ return {
                     "typescriptreact",
                 },
                 capabilities = capabilities,
-                on_attach = on_attach,
             }
 
             vim.lsp.enable({ "lua_ls", "clangd", "ts_ls" })

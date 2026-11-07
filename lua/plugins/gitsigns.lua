@@ -273,12 +273,12 @@ return {
         -- Navigate hunks (falls through to vim's native ]c/[c in diff mode).
         map("n", "]c", function()
             if vim.wo.diff then return "]c" end
-            vim.schedule(function() pcall(gs.next_hunk) end)
+            vim.schedule(function() pcall(gs.nav_hunk, "next") end)
             return "<Ignore>"
         end, { expr = true, silent = true, desc = "Next hunk" })
         map("n", "[c", function()
             if vim.wo.diff then return "[c" end
-            vim.schedule(function() pcall(gs.prev_hunk) end)
+            vim.schedule(function() pcall(gs.nav_hunk, "prev") end)
             return "<Ignore>"
         end, { expr = true, silent = true, desc = "Prev hunk" })
 

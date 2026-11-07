@@ -5,17 +5,13 @@ return {
         event = "VeryLazy",
         opts = {
             preset = "helix",
-        },
-        config = function()
-            local wk = require("which-key")
-            wk.add({
+            spec = {
                 { "<leader>f", group = "File" },
                 { "<leader>r", group = "Refactor" },
                 { "<leader>l", group = "LSP" },
                 { "<leader>b", group = "Buffer" },
                 { "<leader>g", group = "Git" },
-                { "<leader>d", group = "Diagnostics" },
-                { "<leader>c", group = "Config" },
+                { "<leader>c", group = "Code" },
                 { "<leader>x", group = "Trouble" },
                 { "<leader>n", group = "dotNet" },
                 { "<leader>m", group = "Make (C++)" },
@@ -23,8 +19,8 @@ return {
                 { "<leader>nd", group = "Debug" },
                 { "<leader>j", group = "package.json" },
                 { "<leader>u", group = "UI" },
-            })
-        end,
+            },
+        },
     },
 
     -- Floating terminal

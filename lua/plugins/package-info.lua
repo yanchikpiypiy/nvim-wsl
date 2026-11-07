@@ -9,11 +9,19 @@ return {
         require("package-info").setup()
         -- Actions under <leader>j (package.Json) so they don't clash.
         local pi = require("package-info")
-        local map = vim.keymap.set
-        map("n", "<leader>ju", pi.update,          { desc = "Package: update under cursor" })
-        map("n", "<leader>jd", pi.delete,          { desc = "Package: delete under cursor" })
-        map("n", "<leader>ji", pi.install,         { desc = "Package: install new" })
-        map("n", "<leader>jc", pi.change_version,  { desc = "Package: change version" })
-        map("n", "<leader>jt", pi.toggle,          { desc = "Package: toggle version display" })
+        local function set_maps(buf)
+            local function map(lhs, rhs, desc) vim.keymap.set("n", lhs, rhs, { buffer = buf, desc = desc }) end
+            map("<leader>ju", pi.update,         "Package: update under cursor")
+            map("<leader>jd", pi.delete,         "Package: delete under cursor")
+            map("<leader>ji", pi.install,        "Package: install new")
+            map("<leader>jc", pi.change_version, "Package: change version")
+            map("<leader>jt", pi.toggle,         "Package: toggle version display")
+        end
+        -- Only in package.json buffers, not every json file
+        vim.api.nvim_create_autocmd("BufEnter", {
+            pattern = "package.json",
+            callback = function(args) set_maps(args.buf) end,
+        })
+        if vim.fs.basename(vim.api.nvim_buf_get_name(0)) == "package.json" then set_maps(0) end
     end,
 }

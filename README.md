@@ -24,12 +24,11 @@ nvim-dap + dap-ui.
 | `<Esc>` | Clear search highlight |
 | `[b` / `]b` | Previous / next buffer |
 | `<C-Left/Right/Up/Down>` | Resize the current window |
-| `<leader>y` / `<leader>Y` | Yank selection / line to system clipboard |
-| `<leader>p` | Paste from system clipboard |
+| `y` / `p` | Yank / paste — always the system clipboard (`clipboard=unnamedplus`) |
 | `<leader>vs` | Reload the current config file |
 | `<leader>ut` | Theme picker — hover previews live, `<CR>` keeps it, `<Esc>` reverts (`:Theme <id>` too) |
 | `<leader>up` | Palette tuner — pick a symbol kind, hover swatches (live). `<CR>` saves + steps back, `<Esc>` back one level, `q` quits (`:Palette`) |
-| `<leader>f` | Format buffer (conform) — note: also the file-picker prefix |
+| `<leader>cf` | Format buffer (conform) |
 
 ### Motion / editing
 | Key | Action |
@@ -61,7 +60,7 @@ nvim-dap + dap-ui.
 | Key | Action |
 |-----|--------|
 | `<leader>d` | Show diagnostics (float) |
-| `[d` / `]d` | Previous / next diagnostic |
+| `[d` / `]d` | Previous / next diagnostic (built-in; message pops up on arrival) |
 | `<leader>xx` | Trouble: diagnostics |
 | `<leader>xd` | Trouble: buffer diagnostics |
 | `<leader>xs` | Trouble: symbols |
@@ -76,6 +75,8 @@ nvim-dap + dap-ui.
 | `<leader>ff` | Smart find (recent + files, current repo) |
 | `<leader>fs` | Find files (current repo) |
 | `<leader>fg` | Live grep (current repo) |
+| `<leader>fd` | Find a folder by name → opens it in oil |
+| `<leader>fw` | Grep exact word under cursor / visual selection |
 | `<leader>fe` | Find files — **frontend** (`app/`) |
 | `<leader>fa` | Find files — **backend/api** (`api/`) |
 | `<leader>fE` | Live grep — **frontend** |
@@ -85,6 +86,24 @@ nvim-dap + dap-ui.
 | `<leader>fr` / `<leader>fR` | Recent files / resume last picker |
 | `<leader>fc` | Find a config file |
 | `<leader>ft` | Find todos (quickfix) |
+
+File finders (`ff fs fe fa fS fb fr gf fd`) fill the window like an oil buffer (plain list, no preview); grep keeps its preview.
+Inside any picker: type to filter → `<Esc>` drops to normal mode → `j`/`k`/`gg`/`G` → `<CR>` open, `q` close.
+Cut grep noise: `foo -- -g=*.cs` (only .cs), `-- -g=!*test*` (skip tests), `-- -w` (whole word); `<c-g>` freezes results, then type to filter them by path.
+`<a-p>` toggle preview · `<c-v>`/`<c-s>`/`<c-t>` open in vsplit/split/tab · `<c-q>` send results to quickfix.
+
+### Oil (folder as a buffer)
+Opens the folder as plain text. Edit it like any buffer, then `:w` to apply. Simple renames apply without asking, but deletes and moves show a confirm prompt.
+| Key | Action |
+|-----|--------|
+| `-` | Open current file's folder / go up a folder |
+| `<CR>` | Open file or folder |
+| `_` | Jump to cwd (project root) |
+| `<C-p>` | Preview file under cursor |
+| `g.` | Toggle hidden files |
+| `q` / `<C-c>` | Close oil, back to your file |
+| `g?` | Show all oil keys |
+| `dd` / edit name / new line / new line ending `/` | delete / rename / new file / new folder (then `:w`) |
 
 ### Explorer (neo-tree)
 | Key | Action |
@@ -306,8 +325,6 @@ don't read `palette.lua` — edit the `c` table at the top of their file, then
 `:ThemeReload`.
 
 ## Notes
-- `<leader>f` is bound to **format** *and* is the prefix for the find group — pressing
-  `<leader>f` alone formats after `timeoutlen`; `<leader>f{key}` opens a picker.
 - `]f`/`[f` = next/prev **function** globally, but **next/prev failing test** inside
   the C# test-runner window (buffer-local).
 - Indentation on blank lines: `autoindent` inserts the indent when you press Enter but

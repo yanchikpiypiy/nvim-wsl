@@ -188,7 +188,7 @@ vim.api.nvim_create_autocmd("FileType", {
         local stat = name ~= "" and vim.uv.fs_stat(name) or nil
         if stat and stat.size > 256 * 1024 then return end
         local lang = vim.treesitter.language.get_lang(vim.bo[args.buf].filetype)
-        if lang and pcall(vim.treesitter.get_parser, args.buf, lang) then
+        if lang and vim.treesitter.get_parser(args.buf, lang, { error = false }) then
             vim.bo[args.buf].indentexpr = "v:lua.require'nvim-treesitter'.indentexpr()"
         end
     end,

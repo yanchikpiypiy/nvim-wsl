@@ -89,17 +89,7 @@ return {
                         score_offset = 50,
                         opts = { friendly_snippets = true },
                     },
-                    buffer = {
-                        score_offset = -10,
-                        opts = {
-                            -- only show buffer completions from visible buffers
-                            get_bufnrs = function()
-                                return vim.tbl_filter(function(b)
-                                    return vim.bo[b].buftype == ""
-                                end, vim.api.nvim_list_bufs())
-                            end,
-                        },
-                    },
+                    buffer = { score_offset = -10 }, -- blink default: words from visible windows only
                 },
             },
 

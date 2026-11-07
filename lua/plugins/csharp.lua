@@ -106,27 +106,6 @@ return {
                 local client = vim.lsp.get_client_by_id(args.data.client_id)
                 if not client or client.name ~= "roslyn" then return end
 
-                local map = vim.keymap.set
-                local o   = { buffer = args.buf, silent = true }
-                local sp = require("snacks").picker
-
-                -- Drop Neovim's default gr* LSP maps so `gr` isn't a prefix
-                -- (otherwise `gr` waits for a second key before firing).
-                for _, k in ipairs({ "grn", "gra", "grr", "gri", "grt" }) do
-                    pcall(vim.keymap.del, "n", k)
-                end
-
-                map("n", "gd", sp.lsp_definitions,                vim.tbl_extend("force", o, { desc = "Go to definition" }))
-                map("n", "gr", sp.lsp_references,                 vim.tbl_extend("force", o, { desc = "Find references" }))
-                map("n", "gi", sp.lsp_implementations,            vim.tbl_extend("force", o, { desc = "Go to implementation" }))
-                map("n", "gy", sp.lsp_type_definitions,           vim.tbl_extend("force", o, { desc = "Go to type definition" }))
-                map("n", "<leader>rn", vim.lsp.buf.rename,        vim.tbl_extend("force", o, { desc = "Rename symbol" }))
-                map("n", "<leader>ca", vim.lsp.buf.code_action,   vim.tbl_extend("force", o, { desc = "Code action" }))
-                map("n", "<leader>ls", sp.lsp_symbols,            vim.tbl_extend("force", o, { desc = "Document symbols" }))
-                map("n", "<leader>lw", sp.lsp_workspace_symbols,
-                    vim.tbl_extend("force", o, { desc = "Workspace symbols" }))
-                map("n", "<leader>li", "<cmd>LspInfo<CR>",        vim.tbl_extend("force", o, { desc = "LSP info" }))
-
                 -- Enforce the "off by default" that the settings block
                 -- above only describes: inlay hints are the heaviest
                 -- per-keystroke request after CodeLens, and the log showed them

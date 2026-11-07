@@ -19,6 +19,46 @@ local function sub(candidates)
     end
     return r
 end
+-- File finders look like oil: full window, plain list, no preview (<a-p> shows it)
+local quick = {
+    fullscreen = true,
+    hidden = { "preview" },
+    layout = {
+        box = "vertical",
+        backdrop = false,
+        border = "none",
+        { win = "input", height = 1, border = "none" },
+        { win = "list", border = "top", title = " {title} {live} {flags}", title_pos = "left" },
+        { win = "preview", title = "{preview}", height = 0.5, border = "top" },
+    },
+}
+
+-- Folder finder: pick a directory by name, open it in oil
+local function find_dirs()
+    local cwd = root()
+    Snacks.picker.pick({
+        title = "Folders",
+        layout = quick,
+        format = "file",
+        finder = function(opts, ctx)
+            return require("snacks.picker.source.proc").proc(ctx:opts({
+                cmd = "fd",
+                args = { "--type", "d", "--hidden", "-E", ".git", "-E", "node_modules", "-E", "bin", "-E", "obj" },
+                cwd = cwd,
+                transform = function(item)
+                    item.cwd = cwd
+                    item.file = item.text
+                    item.dir = true
+                end,
+            }), ctx)
+        end,
+        confirm = function(picker, item)
+            picker:close()
+            if item then require("oil").open(vim.fs.joinpath(cwd, item.file)) end
+        end,
+    })
+end
+
 local function fe_dir() return sub({ "app", "frontend", "web", "client", "ui" }) end
 local function be_dir() return sub({ "api", "backend", "server", "src" }) end
 
@@ -40,7 +80,20 @@ return {
             ui_select = true, -- route vim.ui.select (code actions) through the picker
             previewers = { diff = { style = "terminal", cmd = { "delta" } } },
             sources = {
+                grep = {
+                    hidden = true,
+                    exclude = {
+                        ".git", "bin", "obj", "build", "node_modules", ".vs", ".idea", "packages",
+                        "TestResults", "dist", "*.map", "*.min.js", "*.min.css", "*.svg",
+                        "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "*.lock",
+                    },
+                },
+                smart = { layout = quick },
+                recent = { layout = quick },
+                buffers = { layout = quick },
+                git_files = { layout = quick },
                 files = {
+                    layout = quick,
                     hidden = true, -- show dotfiles (gitignored still excluded)
                     exclude = {
                         ".git", "bin", "obj", "build", "node_modules",
@@ -60,6 +113,8 @@ return {
         { "<leader>fs", function() Snacks.picker.files({ cwd = root() }) end, desc = "Find files (current repo)" },
         { "<leader>ff", function() Snacks.picker.smart({ cwd = root() }) end, desc = "Smart find (recent + files)" },
         { "<leader>fg", function() Snacks.picker.grep({ cwd = root() }) end,  desc = "Live grep (current repo)" },
+        { "<leader>fd", find_dirs, desc = "Find folder (opens in oil)" },
+        { "<leader>fw", function() Snacks.picker.grep_word({ cwd = root() }) end, mode = { "n", "x" }, desc = "Grep word/selection (current repo)" },
         -- Scoped to frontend (app/) vs backend (api/) — split search
         { "<leader>fe", function() Snacks.picker.files({ cwd = fe_dir() }) end, desc = "Find files (frontend)" },
         { "<leader>fa", function() Snacks.picker.files({ cwd = be_dir() }) end, desc = "Find files (backend/api)" },

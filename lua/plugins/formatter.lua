@@ -4,11 +4,11 @@ return {
     cmd = { "ConformInfo" },
     keys = {
         {
-            "<leader>f",
+            "<leader>cf",
             function()
                 -- Explicit format gives feedback; format_on_save stays silent
                 -- (a toast on every :w would be noise).
-                require("conform").format({ async = true, lsp_fallback = true }, function(err)
+                require("conform").format({ async = true, lsp_format = "fallback" }, function(err)
                     if err then
                         vim.notify("Format failed: " .. err, vim.log.levels.ERROR, { title = "conform" })
                     else
@@ -34,7 +34,7 @@ return {
             -- Auto-writes (InsertLeave) set this to avoid running prettier on
             -- every insert-leave (the frontend-lag culprit). Explicit :w formats.
             if vim.b[bufnr].skip_format_on_save then return nil end
-            return { timeout_ms = 500, lsp_fallback = true }
+            return { timeout_ms = 500, lsp_format = "fallback" }
         end,
     },
 }

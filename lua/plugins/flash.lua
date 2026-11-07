@@ -17,7 +17,7 @@ return {
         -- works from normal mode; use it then operate, or `r`/`R` below for
         -- flash-as-motion.
         { "s", mode = { "n", "x" }, function() require("flash").jump() end,       desc = "Flash" },
-        { "S", mode = { "n", "x" }, function() require("flash").treesitter() end,  desc = "Flash Treesitter" },
+        { "S", mode = "n", function() require("flash").treesitter() end,  desc = "Flash Treesitter" }, -- visual S = surround
         { "r", mode = "o",               function() require("flash").remote() end,      desc = "Remote Flash" },
         { "R", mode = { "o", "x" },       function() require("flash").treesitter_search() end, desc = "Treesitter Search" },
     },
