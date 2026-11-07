@@ -9,7 +9,6 @@ return {
                 { "<leader>f", group = "File" },
                 { "<leader>r", group = "Refactor" },
                 { "<leader>l", group = "LSP" },
-                { "<leader>b", group = "Buffer" },
                 { "<leader>g", group = "Git" },
                 { "<leader>c", group = "Code" },
                 { "<leader>x", group = "Trouble" },

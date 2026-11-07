@@ -58,17 +58,13 @@ return {
         map("n", "<leader>ns",  "<cmd>Dotnet secrets<cr>",     { desc = "User-secrets" })
         map("n", "<leader>np",  "<cmd>Dotnet add package<cr>", { desc = "Add NuGet package" })
 
-        -- New file, no path typing: use the folder under the cursor in neo-tree,
+        -- New file, no path typing: use the folder open in oil,
         -- else the directory of the file you're editing. Always lands inside a
         -- project so you avoid the "no project at this path" error.
         map("n", "<leader>nf", function()
             local dir
-            if vim.bo.filetype == "neo-tree" then
-                local ok, mgr = pcall(require, "neo-tree.sources.manager")
-                local node = ok and mgr.get_state("filesystem").tree:get_node()
-                if node then
-                    dir = node.type == "directory" and node.path or vim.fs.dirname(node.path)
-                end
+            if vim.bo.filetype == "oil" then
+                dir = require("oil").get_current_dir()
             end
             if not dir then
                 local file = vim.fn.expand("%:p")

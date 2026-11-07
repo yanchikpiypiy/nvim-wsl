@@ -71,6 +71,7 @@ return {
         -- Snacks.notify (e.g. "Stash applied", checkout, hunk staged, buffer
         -- reloaded) only flashes once in the command line and is easy to miss,
         -- so git actions feel like nothing happened. This surfaces them all.
+        input = { enabled = true }, -- styled vim.ui.input (rename prompt etc.)
         notifier = {
             enabled = true,
             timeout = 3000,

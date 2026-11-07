@@ -2,7 +2,7 @@
 
 A Neovim config tuned for polyglot work — **.NET (C#) + React/TypeScript** — with
 `roslyn.nvim` for C# intelligence, `ts_ls` for TS, `blink.cmp` completion,
-`snacks.nvim` pickers, `neo-tree` explorer, and a full test/debug workflow.
+`snacks.nvim` pickers, `oil.nvim` file browsing, and a full test/debug workflow.
 
 - **Leader key:** `Space`
 - **Plugin manager:** lazy.nvim (plugins in `lua/plugins/*.lua`)
@@ -96,7 +96,7 @@ Cut grep noise: `foo -- -g=*.cs` (only .cs), `-- -g=!*test*` (skip tests), `-- -
 Opens the folder as plain text. Edit it like any buffer, then `:w` to apply. Simple renames apply without asking, but deletes and moves show a confirm prompt.
 | Key | Action |
 |-----|--------|
-| `-` | Open current file's folder / go up a folder |
+| `-` / `<leader>e` | Open current file's folder / go up a folder |
 | `<CR>` | Open file or folder |
 | `_` | Jump to cwd (project root) |
 | `<C-p>` | Preview file under cursor |
@@ -104,14 +104,6 @@ Opens the folder as plain text. Edit it like any buffer, then `:w` to apply. Sim
 | `q` / `<C-c>` | Close oil, back to your file |
 | `g?` | Show all oil keys |
 | `dd` / edit name / new line / new line ending `/` | delete / rename / new file / new folder (then `:w`) |
-
-### Explorer (neo-tree)
-| Key | Action |
-|-----|--------|
-| `<leader>e` | Toggle file explorer |
-| `<leader>be` | Buffer explorer |
-| `<leader>ge` | Git status (float) |
-| in tree: `l` `h` `H` `P` | open / close node / toggle hidden / preview |
 
 ### Git (`<leader>g`)
 | Key | Action |
@@ -269,7 +261,7 @@ Run from a terminal (the suite is slow + pnpm, so no in-editor plugin):
 | **Gruvbox Classic** | gruvbox hard background and gruvbox's own hues, plus orange comments; keywords split three ways |
 
 Shared gruvbox UI furniture — fg-only git status colours, subtle diff tints, the
-diffview / snacks / neo-tree groups — lives in `lua/config/gruvbox_chrome.lua` rather
+diffview / snacks groups — lives in `lua/config/gruvbox_chrome.lua` rather
 than being duplicated per theme. `build{ white, dim, add, change, delete }` returns the
 table to merge underneath your syntax groups:
 

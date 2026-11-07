@@ -5,6 +5,7 @@ return {
     lazy = false,
     keys = {
         { "-", "<cmd>Oil<CR>", desc = "Open parent folder (oil)" },
+        { "<leader>e", "<cmd>Oil<CR>", desc = "Explorer (oil)" },
     },
     opts = {
         view_options = { show_hidden = true },

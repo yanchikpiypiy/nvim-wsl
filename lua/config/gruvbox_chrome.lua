@@ -81,19 +81,6 @@ function M.build(opts)
         ["SnacksPickerDirectory"] = { fg = white, bold = true },
 
         ["Directory"]            = { fg = white, bold = true },  -- gruvbox: green bold
-        ["NeoTreeFileName"]      = { fg = white },
-        ["NeoTreeDirectoryName"] = { fg = white, bold = true },
-        ["NeoTreeDirectoryIcon"] = { fg = dim },
-        ["NeoTreeRootName"]      = { fg = white, bold = true },
-        ["NeoTreeDotfile"]       = { fg = dim },
-        ["NeoTreeHiddenByName"]  = { fg = dim },
-        ["NeoTreeIndentMarker"]  = { fg = g.dark3 },
-        ["NeoTreeGitAdded"]      = { fg = add },
-        ["NeoTreeGitStaged"]     = { fg = add },
-        ["NeoTreeGitModified"]   = { fg = change },
-        ["NeoTreeGitDeleted"]    = { fg = delete },
-        ["NeoTreeGitConflict"]   = { fg = delete },
-        ["NeoTreeGitUntracked"]  = { fg = dim },
     }
 end
 

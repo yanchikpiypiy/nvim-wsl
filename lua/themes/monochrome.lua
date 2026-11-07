@@ -210,7 +210,6 @@ return {
             ["SnacksPickerGitStatusRenamed"]   = { fg = c.chg },
             ["SnacksPickerGitStatusDeleted"]   = { fg = c.del },
             ["SnacksPickerGitStatusUntracked"] = { fg = c.dim },
-            ["NeoTreeFileName"]                = { fg = c.fg },
             -- ---- git signs / diff ----
             ["GitSignsAdd"]    = { fg = c.add },
             ["GitSignsChange"] = { fg = c.chg },
@@ -220,20 +219,7 @@ return {
             ["DiffDelete"] = { bg = "#2a1416" },
             ["DiffText"]   = { bg = "#2a2a3a" },
 
-            -- ---- plugins: neo-tree / which-key / trouble / fidget ----
-            ["NeoTreeNormal"]        = { fg = c.fg, bg = c.bg },
-            ["NeoTreeNormalNC"]      = { fg = c.fg, bg = c.bg },
-            ["NeoTreeFloatBorder"]   = { fg = c.border, bg = c.panel },
-            ["NeoTreeTitleBar"]      = { fg = c.bg, bg = c.accent, bold = true },
-            ["NeoTreeRootName"]      = { fg = c.accent, bold = true },
-            ["NeoTreeDirectoryName"] = { fg = c.fg },
-            ["NeoTreeDirectoryIcon"] = { fg = c.func },
-            ["NeoTreeIndentMarker"]  = { fg = c.border },
-            ["NeoTreeGitAdded"]      = { fg = c.add },
-            ["NeoTreeGitModified"]   = { fg = c.chg },
-            ["NeoTreeGitDeleted"]    = { fg = c.del },
-            ["NeoTreeGitUntracked"]  = { fg = c.dim },
-            ["NeoTreeGitConflict"]   = { fg = c.warn },
+            -- ---- plugins: which-key / trouble ----
             ["WhichKey"]          = { fg = c.accent },
             ["WhichKeyGroup"]     = { fg = c.func },
             ["WhichKeyDesc"]      = { fg = c.fg },

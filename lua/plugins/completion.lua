@@ -1,14 +1,4 @@
 return {
-    -- Snippets engine
-    {
-        "L3MON4D3/LuaSnip",
-        event = "InsertEnter", -- off startup; blink also pulls it when completing
-        dependencies = { "rafamadriz/friendly-snippets" },
-        config = function()
-            require("luasnip.loaders.from_vscode").lazy_load()
-        end,
-    },
-
     -- Autopairs (works independently of blink)
     {
         "windwp/nvim-autopairs",
@@ -18,11 +8,11 @@ return {
         end,
     },
 
-    -- Completion (blink pulls in LuaSnip + blink-cmp-copilot as dependencies)
+    -- Completion; snippets use blink's built-in engine + friendly-snippets
     {
         "saghen/blink.cmp",
         dependencies = {
-            "L3MON4D3/LuaSnip",
+            "rafamadriz/friendly-snippets",
             "giuxtaposition/blink-cmp-copilot",
         },
         version = "*",
@@ -92,8 +82,6 @@ return {
                     buffer = { score_offset = -10 }, -- blink default: words from visible windows only
                 },
             },
-
-            snippets = { preset = "luasnip" },
 
             completion = {
                 ghost_text = {

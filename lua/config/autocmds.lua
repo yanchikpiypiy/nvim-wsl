@@ -67,7 +67,7 @@ vim.api.nvim_create_autocmd("FileChangedShellPost", {
 -- Consistent dismissal: press `q` to close transient / read-only windows.
 -- Neovim's built-in help, quickfix, man, checkhealth, LSP-info and notification
 -- buffers have NO `q` mapping by default (you'd have to `:q`), while the plugin
--- panels you use already close on `q` (trouble, diffview, neo-tree, harpoon,
+-- panels you use already close on `q` (trouble, diffview, oil, harpoon,
 -- lazygit). This unifies them so the rule is simply:
 --   navigating a panel -> `q`   |   typing in a picker/prompt -> <Esc>
 vim.api.nvim_create_autocmd("FileType", {
