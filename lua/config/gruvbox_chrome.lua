@@ -34,6 +34,11 @@ function M.build(opts)
         ["Removed"]     = { fg = delete },
         ["Changed"]     = { fg = change },
 
+        -- flash: every match looks the same, the jump letter is what stands out
+        ["FlashMatch"]   = { fg = white, bg = g.dark2 },
+        ["FlashCurrent"] = { fg = white, bg = g.dark2 },
+        ["FlashLabel"]   = { fg = g.dark0_hard, bg = g.bright_red, bold = true },
+
         ["SignColumn"]   = { bg = bg },
         ["FoldColumn"]   = { fg = g.gray, bg = bg },
         ["CursorLineNr"] = { fg = g.bright_yellow, bg = bg, bold = true },

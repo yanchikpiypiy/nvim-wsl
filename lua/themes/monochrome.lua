@@ -6,6 +6,7 @@ return {
     desc = "greyscale + accents, tuned for C++/C#",
     base = "monochrome",  -- plugin colorscheme (kdheepak/monochrome.nvim) we paint over
     background = "dark",
+    setup = function() vim.g.monochrome_style = "default" end,  -- don't inherit a Mono preset's style
     highlights = function()
         local p = require("config.palette")
         local c = {

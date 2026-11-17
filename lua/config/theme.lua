@@ -51,7 +51,70 @@ M.plugins = {
         setup = function() vim.g.everforest_background = "soft" end,
         colorscheme = "everforest",
     },
+    {
+        id = "kanagawa-dragon",
+        name = "Kanagawa Dragon",
+        desc = "near-black, muted warm",
+        colorscheme = "kanagawa-dragon",
+    },
+    {
+        id = "kanagawa-wave",
+        name = "Kanagawa Wave",
+        desc = "dark navy, more colour",
+        colorscheme = "kanagawa-wave",
+    },
+    {
+        id = "quiet",
+        name = "Quiet",
+        desc = "built-in, black & white",
+        colorscheme = "quiet",
+    },
+    {
+        id = "no-clown-fiesta",
+        name = "No Clown Fiesta",
+        desc = "black & white, faint colour",
+        colorscheme = "no-clown-fiesta",
+    },
+    {
+        id = "no-clown-fiesta-dim",
+        name = "No Clown Fiesta Dim",
+        desc = "softer background",
+        colorscheme = "no-clown-fiesta-dim",
+    },
+    {
+        id = "alabaster",
+        name = "Alabaster",
+        desc = "only strings/comments/constants coloured",
+        colorscheme = "alabaster",
+    },
+    {
+        id = "vesper",
+        name = "Vesper",
+        desc = "black & white, soft orange",
+        colorscheme = "vesper",
+    },
 }
+
+-- Black Metal variants: black & white with one dim accent each.
+for _, band in ipairs({ "darkthrone", "mayhem", "bathory", "burzum" }) do
+    M.plugins[#M.plugins + 1] = {
+        id = band,
+        name = "Black Metal " .. band:sub(1, 1):upper() .. band:sub(2),
+        desc = "black & white, one dim accent",
+        colorscheme = band,
+    }
+end
+
+-- Stock monochrome.nvim styles, pure greyscale (no accents, unlike themes/monochrome.lua).
+for _, style in ipairs({ "default", "subtle", "amplified", "coolgray", "photon" }) do
+    M.plugins[#M.plugins + 1] = {
+        id = "mono-" .. style,
+        name = "Mono " .. style:sub(1, 1):upper() .. style:sub(2),
+        desc = "monochrome.nvim, pure grey",
+        setup = function() vim.g.monochrome_style = style end,
+        colorscheme = "monochrome",
+    }
+end
 
 M.default = "gruvbox-hard"
 M.current = nil
@@ -151,6 +214,7 @@ end
 -- Called once at startup, after all plugins are on the runtimepath.
 function M.restore()
     local id = M.saved() or M.default
+    if not find(id) then id = M.default end  -- saved theme was removed from the list
     if not M.apply(id) and id ~= M.default then
         M.apply(M.default)
     end

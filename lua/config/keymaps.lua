@@ -45,3 +45,14 @@ map("n", "<C-Left>",  "<cmd>vertical resize -2<CR>",  vim.tbl_extend("force", op
 map("n", "<C-Right>", "<cmd>vertical resize +2<CR>",  vim.tbl_extend("force", opts, { desc = "Increase width" }))
 map("n", "<C-Up>",    "<cmd>resize +2<CR>",            vim.tbl_extend("force", opts, { desc = "Increase height" }))
 map("n", "<C-Down>",  "<cmd>resize -2<CR>",            vim.tbl_extend("force", opts, { desc = "Decrease height" }))
+
+-- Window jumping
+map("n", "<A-Left>",  "<C-w>h", vim.tbl_extend("force", opts, { desc = "Window left" }))
+map("n", "<A-Right>", "<C-w>l", vim.tbl_extend("force", opts, { desc = "Window right" }))
+map("n", "<A-Up>",    "<C-w>k", vim.tbl_extend("force", opts, { desc = "Window up" }))
+map("n", "<A-Down>",  "<C-w>j", vim.tbl_extend("force", opts, { desc = "Window down" }))
+
+-- Closing: split (never quits nvim), other splits, file (keeps layout)
+map("n", "<leader>q",  "<C-w>c", vim.tbl_extend("force", opts, { desc = "Close split" }))
+map("n", "<leader>o",  "<C-w>o", vim.tbl_extend("force", opts, { desc = "Close other splits" }))
+map("n", "<leader>bd", function() Snacks.bufdelete() end, vim.tbl_extend("force", opts, { desc = "Close file, keep layout" }))

@@ -24,6 +24,9 @@ nvim-dap + dap-ui.
 | `<Esc>` | Clear search highlight |
 | `[b` / `]b` | Previous / next buffer |
 | `<C-Left/Right/Up/Down>` | Resize the current window |
+| `<A-Left/Right/Up/Down>` | Jump to the split in that direction |
+| `<leader>q` / `<leader>o` | Close this split (never quits nvim) / close all other splits |
+| `<leader>bd` | Close the file but keep the split layout |
 | `y` / `p` | Yank / paste — always the system clipboard (`clipboard=unnamedplus`) |
 | `<leader>vs` | Reload the current config file |
 | `<leader>ut` | Theme picker — hover previews live, `<CR>` keeps it, `<Esc>` reverts (`:Theme <id>` too) |
@@ -244,7 +247,9 @@ Run from a terminal (the suite is slow + pnpm, so no in-editor plugin):
 
 ## Themes
 - `<leader>ut` / `:Theme` opens the picker. Entries are tagged **plugin** (gruvbox,
-  everforest) or **custom** (hand-rolled). Hovering previews live; `<CR>` saves the
+  everforest, kanagawa dragon/wave, black & white ones: quiet (built-in), no-clown-fiesta,
+  alabaster, vesper, Black Metal variants, and the five stock `monochrome.nvim` styles as
+  "Mono …" — pure grey, unlike the custom Monochrome) or **custom** (hand-rolled). Hovering previews live; `<CR>` saves the
   choice to `~/.local/state/nvim/theme`, `<Esc>` reverts.
 - Plugin themes are listed in `lua/config/theme.lua` (`M.plugins`).
 - Custom themes live one-per-file in `lua/themes/`. A file returns
